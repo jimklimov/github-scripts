@@ -229,6 +229,10 @@ for COMMENT_URL in $GIST_COMMENTLIST; do
     > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
 done
 
+# FIXME: Leave at least one backup for each timestamped item sequence!
+# GitHub going AWOL and us deleting all backups after 3 days would be folly!
+# (Less of a problem if we do keep the repos, but comments/issues/medatata
+# are still at risk - maybe GIT their evolution locally?)
 if $GHBU_PRUNE_OLD; then
   $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
   $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
