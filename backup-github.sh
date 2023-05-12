@@ -35,7 +35,7 @@ GHBU_ORG=${GHBU_ORG-"<CHANGE-ME>"}                                   # the GitHu
 GHBU_UNAME=${GHBU_UNAME-"<CHANGE-ME>"}                               # the username of a GitHub account (to use with the GitHub API)
 GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the password for that account 
 #-------------------------------------------------------------------------------
-GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org" or "user"?
+GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "user" or "gists"?
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
@@ -73,19 +73,36 @@ check mkdir -p $GHBU_BACKUP_DIR
 
 $GHBU_SILENT || echo -n "Fetching list of repositories for ${GHBU_ORG}..."
 
-if [ x"$GHBU_ORGMODE" = x"org" ] ; then
-    GHBU_ORG_URI="/orgs/${GHBU_ORG}"
-else
-    # NOTE: if you're backing up a *user's* repos, not an organizations, use this instead:
-    GHBU_ORG_URI="/user"
-fi
+case x"$GHBU_ORGMODE" in
+    x"gist"|x"gists")
+        GHBU_ORG_URI="/gists"
+        ;;
+    x"user"|x"users")
+        # NOTE: if you're backing up a *user's* repos, not an organizations, use this instead:
+        GHBU_ORG_URI="/user"
+        ;;
+    x"org"|*)   # Legacy default
+        GHBU_ORG_URI="/orgs/${GHBU_ORG}"
+        ;;
+esac
+
+function filter_gist {
+    check sed -n 's/.*git_pull_url": "\(.*\)",/\1/p'
+}
 
 REPOLIST=""
 REPOLIST_PAGE=""
 PAGENUM=1
 while : ; do
-    # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
-    REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g')"
+    case x"$GHBU_ORGMODE" in
+        xorg*|xuser*)
+            # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
+            REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g')"
+            ;;
+        xgist*)
+            REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q | filter_gist)"
+            ;;
+    esac
     if [ -z "$REPOLIST" ] ; then
         REPOLIST="$REPOLIST_PAGE"
     else
