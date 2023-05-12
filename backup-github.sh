@@ -38,6 +38,7 @@ GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the passw
 GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "user" or "gists"?
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
+GHBU_REUSE_REPOS=${GHBU_REUSE_REPOS-false}                           # as part of backup process, we mirror-clone remote git repos; should we keep and reuse them for next backups (true), or always snatch from scratch (false)?
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages 
@@ -61,9 +62,13 @@ function check {
   fi
 }
 
-# The function `tgz` will create a gzipped tar archive of the specified file ($1) and then remove the original
+# The function `tgz` will create a gzipped tar archive of the specified
+# file ($1) and then optionally remove the original
 function tgz {
-   check tar zcf $1.tar.gz $1 && check rm -rf $1
+    check tar zcf "$1.tar.gz" "$1" || return
+    if ! $GHBU_REUSE_REPOS ; then
+        check rm -rf "$1"
+    fi
 }
 
 $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
