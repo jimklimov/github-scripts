@@ -71,6 +71,14 @@ function tgz {
     fi
 }
 
+function filter_user_org {
+    check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'
+}
+
+function filter_gist {
+    check sed -n 's/.*git_pull_url": "\(.*\)",/\1/p'
+}
+
 $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 
 $GHBU_SILENT || echo "Using backup directory $GHBU_BACKUP_DIR"
@@ -91,10 +99,6 @@ case x"$GHBU_ORGMODE" in
         ;;
 esac
 
-function filter_gist {
-    check sed -n 's/.*git_pull_url": "\(.*\)",/\1/p'
-}
-
 REPOLIST=""
 REPOLIST_PAGE=""
 PAGENUM=1
@@ -102,10 +106,12 @@ while : ; do
     case x"$GHBU_ORGMODE" in
         xorg*|xuser*)
             # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
-            REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g')"
+            JSON="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q)"
+            REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
-            REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q | filter_gist)"
+            JSON="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             ;;
     esac
     if [ -z "$REPOLIST" ] ; then
