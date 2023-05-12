@@ -43,7 +43,9 @@ GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `tru
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages 
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
-GHBU_GIT_CLONE_CMD="git clone --quiet --mirror git@${GHBU_GITHOST}:" # base command to use to clone GitHub repos
+GHBU_GIT_CLONE_CMD="git clone --quiet --mirror "                     # base command to use to clone GitHub repos from an URL (may need more info for SSH)
+GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
+GHBU_GIT_UPDATE_CMD="git fetch --quiet --all && git fetch --quiet --tags"       # base command to update an existing repo (if reusing)
 TSTAMP=`date "+%Y%m%d-%H%M"`                                         # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
@@ -65,10 +67,57 @@ function check {
 # The function `tgz` will create a gzipped tar archive of the specified
 # file ($1) and then optionally remove the original
 function tgz {
-    check tar zcf "$1.tar.gz" "$1" || return
+    check tar zcf "$1.$TSTAMP.tar.gz" "$1" || return
     if ! $GHBU_REUSE_REPOS ; then
         check rm -rf "$1"
     fi
+}
+
+# The function `getdir` will return the repo directory name on stdout
+# if successful (it depends on GHBU_REUSE_REPOS value).
+function getdir {
+    local REPOURI="$1"
+    local DIRNAME
+
+    REPOURI="$(echo "$REPOURI" | sed 's,^https://gist.github.com/\(.*\)$,gist-\1,')"
+    REPOURI="$(echo "$REPOURI" | sed 's,^'"$GHBU_API"'/gists/\([^/]*\)/comments$,gist-\1-comments,')"
+
+    if $GHBU_REUSE_REPOS ; then
+        DIRNAME="${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPOURI}"
+    fi
+    if ! $GHBU_REUSE_REPOS ; then
+        DIRNAME="${DIRNAME}-${TSTAMP}"
+    fi
+    case "$REPOURI" in
+        *.git) ;;
+        *) DIRNAME="${DIRNAME}.git" ;;
+    esac
+    echo "$DIRNAME"
+}
+
+# The function `getgit` will clone (or update) specified repo ($1, without
+# a `.git` suffix) into specified directory ($2)
+function getgit {
+    local REPOURI="$1"
+    local DIRNAME="$2"
+
+    if $GHBU_REUSE_REPOS && [ -d "${DIRNAME}" ] ; then
+        $GHBU_SILENT || echo "... Updating $REPOURI clone in $DIRNAME"
+        (cd "${DIRNAME}" && eval $GHBU_GIT_UPDATE_CMD) || return
+    else
+        $GHBU_SILENT || echo "... Cloning $REPOURI into $DIRNAME"
+        case x"$1" in
+            x*@*|x*://*) # URL already; .git suffix should be irrelevant
+                ${GHBU_GIT_CLONE_CMD} "${REPOURI}" "${DIRNAME}" || return
+                ;;
+            *) # Just a repo name
+                ${GHBU_GIT_CLONE_CMD_SSH}"${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}" || return
+                ;;
+        esac
+    fi
+
+    # Return a success either way here:
+    $GHBU_SILENT || echo "+++ Received $REPOURI into $DIRNAME"
 }
 
 function filter_user_org {
@@ -137,14 +186,25 @@ GHBU_REUSE_REPOS=false tgz "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.js
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
 
 for REPO in $REPOLIST; do
-   $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}"
-   check ${GHBU_GIT_CLONE_CMD}${GHBU_ORG}/${REPO}.git ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}-${TSTAMP}.git && tgz ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}-${TSTAMP}.git
+    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}"
+    DIRNAME="`getdir "$REPO"`"
+    check getgit "${REPO}" "${DIRNAME}" && tgz "${DIRNAME}"
 
-   $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}.wiki (if any)"
-   ${GHBU_GIT_CLONE_CMD}${GHBU_ORG}/${REPO}.wiki.git ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}.wiki-${TSTAMP}.git 2>/dev/null && tgz ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}.wiki-${TSTAMP}.git
+    # No wikis nor issues for gists; what about comments however?
+    case x"$GHBU_ORGMODE" in
+        xorg*|xuser*)
+            $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}.wiki (if any)"
+            DIRNAME="`getdir "$REPO.wiki"`"
+            # Failure is an option
+            getgit "${REPO}.wiki" "${DIRNAME}" 2>/dev/null && tgz "${DIRNAME}"
 
-   $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
-   check curl --silent -u $GHBU_UNAME:$GHBU_PASSWD ${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues -q > ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}.issues-${TSTAMP} && tgz ${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPO}.issues-${TSTAMP}
+            $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
+            DIRNAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
+            check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" \
+                "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" -q \
+            > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
+            ;;
+    esac
 done
 
 if $GHBU_PRUNE_OLD; then
