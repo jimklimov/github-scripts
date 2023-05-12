@@ -128,6 +128,10 @@ function filter_gist {
     check sed -n 's/.*git_pull_url": "\(.*\)",/\1/p'
 }
 
+function filter_gist_comments {
+    check sed -n 's/.*comments_url": "\(.*\)",/\1/p'
+}
+
 $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 
 $GHBU_SILENT || echo "Using backup directory $GHBU_BACKUP_DIR"
@@ -148,6 +152,8 @@ case x"$GHBU_ORGMODE" in
         ;;
 esac
 
+GIST_COMMENTLIST=""
+GIST_COMMENTLIST_PAGE=""
 REPOLIST=""
 REPOLIST_PAGE=""
 PAGENUM=1
@@ -162,6 +168,7 @@ while : ; do
         xgist*)
             JSON="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
+            GIST_COMMENTLIST_PAGE="$(echo "$JSON" | filter_gist_comments)"
             ;;
     esac
 
@@ -172,6 +179,12 @@ while : ; do
     else
         REPOLIST="$REPOLIST
 $REPOLIST_PAGE"
+    fi
+    if [ -z "$GIST_COMMENTLIST" ] ; then
+        GIST_COMMENTLIST="$GIST_COMMENTLIST_PAGE"
+    else
+        GIST_COMMENTLIST="$GIST_COMMENTLIST
+$GIST_COMMENTLIST_PAGE"
     fi
     if [ 100 -ne `echo $REPOLIST_PAGE | wc -w` ] ; then
         break
@@ -190,7 +203,7 @@ for REPO in $REPOLIST; do
     DIRNAME="`getdir "$REPO"`"
     check getgit "${REPO}" "${DIRNAME}" && tgz "${DIRNAME}"
 
-    # No wikis nor issues for gists; what about comments however?
+    # No wikis nor issues for gists; but there are comments (see another loop)
     case x"$GHBU_ORGMODE" in
         xorg*|xuser*)
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}.wiki (if any)"
@@ -205,6 +218,15 @@ for REPO in $REPOLIST; do
             > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
             ;;
     esac
+done
+
+# Assumes GHBU_ORGMODE=gist, but no reason to constrain:
+for COMMENT_URL in $GIST_COMMENTLIST; do
+    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments"
+    DIRNAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
+    check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" \
+        "${COMMENT_URL}" -q \
+    > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
 done
 
 if $GHBU_PRUNE_OLD; then
