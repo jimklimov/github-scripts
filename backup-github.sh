@@ -2,6 +2,7 @@
 # A simple script to backup an organization's GitHub repositories.
 # Initially from https://gist.github.com/rodw/3073987 snapshot at
 # https://gist.githubusercontent.com/rodw/3073987/raw/d5e9ab4785647e558df488eb18623aa6c52af86b/backup-github.sh
+# Continued afterwards 2023+ by Jim Klimov <gmail.com>
 
 #-------------------------------------------------------------------------------
 # NOTES:
@@ -34,6 +35,7 @@ GHBU_ORG=${GHBU_ORG-"<CHANGE-ME>"}                                   # the GitHu
 GHBU_UNAME=${GHBU_UNAME-"<CHANGE-ME>"}                               # the username of a GitHub account (to use with the GitHub API)
 GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the password for that account 
 #-------------------------------------------------------------------------------
+GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org" or "user"?
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
@@ -71,11 +73,33 @@ check mkdir -p $GHBU_BACKUP_DIR
 
 $GHBU_SILENT || echo -n "Fetching list of repositories for ${GHBU_ORG}..."
 
-REPOLIST=`check curl --silent -u $GHBU_UNAME:$GHBU_PASSWD ${GHBU_API}/orgs/${GHBU_ORG}/repos\?per_page=100 -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'` # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
-# NOTE: if you're backing up a *user's* repos, not an organizations, use this instead:
-# REPOLIST=`check curl --silent -u $GHBU_UNAME:$GHBU_PASSWD ${GHBU_API}/user/repos -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'`
+if [ x"$GHBU_ORGMODE" = x"org" ] ; then
+    GHBU_ORG_URI="/orgs/${GHBU_ORG}"
+else
+    # NOTE: if you're backing up a *user's* repos, not an organizations, use this instead:
+    GHBU_ORG_URI="/user"
+fi
 
-$GHBU_SILENT || echo "found `echo $REPOLIST | wc -w` repositories."
+REPOLIST=""
+REPOLIST_PAGE=""
+PAGENUM=1
+while : ; do
+    # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
+    REPOLIST_PAGE="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q | check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g')"
+    if [ -z "$REPOLIST" ] ; then
+        REPOLIST="$REPOLIST_PAGE"
+    else
+        REPOLIST="$REPOLIST
+$REPOLIST_PAGE"
+    fi
+    if [ 100 -ne `echo $REPOLIST_PAGE | wc -w` ] ; then
+        break
+    fi
+    PAGENUM=$(($PAGENUM+1))
+    $GHBU_SILENT || echo -n " Fetching next page of repos: $PAGENUM..."
+done
+
+$GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
 
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
