@@ -103,6 +103,7 @@ REPOLIST=""
 REPOLIST_PAGE=""
 PAGENUM=1
 while : ; do
+    JSON=""
     case x"$GHBU_ORGMODE" in
         xorg*|xuser*)
             # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
@@ -114,6 +115,9 @@ while : ; do
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             ;;
     esac
+
+    echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
+
     if [ -z "$REPOLIST" ] ; then
         REPOLIST="$REPOLIST_PAGE"
     else
@@ -128,7 +132,7 @@ $REPOLIST_PAGE"
 done
 
 $GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
-
+GHBU_REUSE_REPOS=false tgz "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
 
