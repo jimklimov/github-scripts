@@ -234,10 +234,10 @@ done
 # (Less of a problem if we do keep the repos, but comments/issues/medatata
 # are still at risk - maybe GIT their evolution locally?)
 if $GHBU_PRUNE_OLD; then
-  $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
-  $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
-  $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -name '*.tar.gz' -mtime +$GHBU_PRUNE_AFTER_N_DAYS | wc -l` files to prune."
-  find $GHBU_BACKUP_DIR -name '*.tar.gz' -mtime +$GHBU_PRUNE_AFTER_N_DAYS -exec rm -fv {} > /dev/null \; 
+    $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
+    $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
+    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
+    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
 fi
 
 $GHBU_SILENT || (echo "" && echo "=== DONE ===" && echo "")
