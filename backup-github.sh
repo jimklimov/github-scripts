@@ -46,6 +46,7 @@ GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "u
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files; avoid using ":" in the name (confuses tar as a hostname; confuses Windows as a drive letter)
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
 GHBU_REUSE_REPOS=${GHBU_REUSE_REPOS-false}                           # as part of backup process, we mirror-clone remote git repos; should we keep and reuse them for next backups (true), or always snatch from scratch (false)?
+GHBU_TARBALL_REPOS=${GHBU_TARBALL_REPOS-true}                        # when `true`, tarballs for each backed-up repository would be made; when false (e.g. if persistent repos due to GHBU_REUSE_REPOS=true suffice), only non-git items would be tarballed (issues, comments, metadata)
 GHBU_PRUNE_INCOMPLETE=${GHBU_PRUNE_INCOMPLETE-false}                 # when `true`, backups named like *.__WRITING__ will be deleted when script starts (set `false` if using same GHBU_BACKUP_DIR for several scripts running in parallel)
 GHBU_PRUNE_PREV=${GHBU_PRUNE_PREV-false}                             # when `true`, only the "*.latest.tar.gz" backups will be tracked; when `false` also the `*.prev.tar.gz"
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
@@ -76,6 +77,8 @@ function check {
 # The function `tgz` will create a gzipped tar archive of the specified
 # file ($1) and then optionally remove the original
 function tgz {
+    $GHBU_TARBALL_REPOS || return 0
+
     check tar zcf "$1.$TSTAMP.tar.gz.__WRITING__" "$1" \
     && check mv -f "$1.$TSTAMP.tar.gz.__WRITING__" "$1.$TSTAMP.tar.gz" \
     || return
@@ -92,6 +95,13 @@ function tgz {
         mv -f "$1.latest.tar.gz" "$1.prev.tar.gz" || true
     fi
     check ln "$1.$TSTAMP.tar.gz" "$1.latest.tar.gz"
+}
+
+# Shortcut for non-repo items (issues, comments, metadata JSONs...)
+function tgz_nonrepo {
+    GHBU_TARBALL_REPOS=true \
+    GHBU_REUSE_REPOS=false \
+    tgz "$@"
 }
 
 # The function `getdir` will return the repo directory name on stdout
@@ -221,7 +231,7 @@ $GIST_COMMENTLIST_PAGE"
 done
 
 $GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
-GHBU_REUSE_REPOS=false tgz "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
+tgz_nonrepo "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
 
@@ -242,7 +252,7 @@ for REPO in $REPOLIST; do
             DIRNAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
                 "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" -q \
-            > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
+            > "${DIRNAME}" && tgz_nonrepo "${DIRNAME}"
             ;;
     esac
 done
@@ -253,7 +263,7 @@ for COMMENT_URL in $GIST_COMMENTLIST; do
     DIRNAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
     check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
         "${COMMENT_URL}" -q \
-    > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
+    > "${DIRNAME}" && tgz_nonrepo "${DIRNAME}"
 done
 
 # FIXME: Leave at least one backup for each timestamped item sequence!
