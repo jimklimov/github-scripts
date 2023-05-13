@@ -113,6 +113,7 @@ function prune_incomplete {
         $GHBU_SILENT || (echo "" && echo "=== PRUNING INCOMPLETE LEFTOVERS (if any) ===" && echo "")
         $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' | wc -l` files to prune."
         find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' -exec rm -fv {} > /dev/null \;
+        $GHBU_SILENT || (echo "" && echo "=== PRUNING FINISHED ===" && echo "")
     fi
 }
 
@@ -357,6 +358,7 @@ if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -ge 0 ]; then
     $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
     $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
     find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
+    $GHBU_SILENT || (echo "" && echo "=== PRUNING FINISHED ===" && echo "")
 fi
 prune_incomplete
 
