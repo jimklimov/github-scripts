@@ -82,6 +82,10 @@ function tgz {
     if ! $GHBU_REUSE_REPOS ; then
         check rm -rf "$1"
     fi
+
+    rm -f "$1.latest.tar.gz" || true
+    # Let one copy survive the auto-prune
+    ln "$1.$TSTAMP.tar.gz" "$1.latest.tar.gz"
 }
 
 # The function `getdir` will return the repo directory name on stdout
@@ -253,8 +257,8 @@ done
 if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -gt 0 ]; then
     $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
     $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
-    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
-    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
+    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
+    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*latest.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
 fi
 
 $GHBU_SILENT || (echo "" && echo "=== DONE ===" && echo "")
