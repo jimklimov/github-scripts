@@ -1,0 +1,30 @@
+Overview
+========
+
+This repository contains some scripts I found useful for work with github
+as a platform, lower-level and more exploratory than using their CLI tools
+(recommended otherwise - but yet another dependency/install on a system...)
+
+For some more general nifty Git scripts see:
+
+* https://github.com/jimklimov/git-scripts
+* https://github.com/jimklimov/git-refrepo-scripts
+
+For GitHub API aware build recipes, see:
+
+* https://github.com/jimklimov/FTY - a "dispatcher repo" from 42ITy project
+  I worked with, which maintains submodules for a (discoverable) horde of
+  components and a set of `Makefile`s to build them on several platforms.
+
+backup-github.sh
+~~~~~~~~~~~~~~~~
+
+This script originated as a gist in https://gist.github.com/rodw/3073987
+but I had some itches to scratch with it, so forked, and it grew...
+
+Now it can handle backups of both Orgs, Users and Gists over SSH (if keys
+are preloaded to SSH agent) or HTTP(S) protocols, and includes systemd unit
+wrappers (timer, service) to run regularly after you get it set up initially.
+
+Hope this helps,
+Jim Klimov
