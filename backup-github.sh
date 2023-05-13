@@ -224,6 +224,10 @@ case x"$GHBU_ORGMODE" in
         ;;
 esac
 
+# Be sure to stash a fresh copy, even if previous backup was interrupted
+rm -f "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__"
+touch "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__"
+
 GIST_COMMENTLIST=""
 GIST_COMMENTLIST_PAGE=""
 REPOLIST=""
@@ -244,7 +248,7 @@ while : ; do
             ;;
     esac
 
-    echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
+    echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__"
 
     if [ -z "$REPOLIST" ] ; then
         REPOLIST="$REPOLIST_PAGE"
@@ -266,6 +270,7 @@ $GIST_COMMENTLIST_PAGE"
 done
 
 $GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
+mv -f "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__" "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 tgz_nonrepo "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
@@ -280,14 +285,16 @@ for REPO in $REPOLIST; do
         xorg*|xuser*)
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}.wiki (if any)"
             DIRNAME="`getdir "$REPO.wiki"`"
-            # Failure is an option
+            # Failure is an option for wikis:
             getgit "${REPO}.wiki" "${DIRNAME}" 2>/dev/null && tgz "${DIRNAME}"
 
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
-            DIRNAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
+            FILENAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
                 "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" -q \
-            > "${DIRNAME}" && tgz_nonrepo "${DIRNAME}"
+            > "${FILENAME}.__WRITING__" \
+            && mv -f "${FILENAME}.__WRITING__" "${FILENAME}" \
+            && tgz_nonrepo "${FILENAME}"
             ;;
     esac
 done
@@ -295,10 +302,12 @@ done
 # Assumes GHBU_ORGMODE=gist, but no reason to constrain:
 for COMMENT_URL in $GIST_COMMENTLIST; do
     $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments"
-    DIRNAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
+    FILENAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
     check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
         "${COMMENT_URL}" -q \
-    > "${DIRNAME}" && tgz_nonrepo "${DIRNAME}"
+    > "${FILENAME}.__WRITING__" \
+    && mv -f "${FILENAME}.__WRITING__" "${FILENAME}" \
+    && tgz_nonrepo "${FILENAME}"
 done
 
 # NOTE: the "latest" and optional "prev" handling below allows us to leave at
