@@ -185,6 +185,8 @@ function getgit (
 )
 
 function filter_user_org {
+    # Might be better off getting a "clone_url" here, but so far our
+    # directory naming etc. rely on the "REPONAME" value received here:
     check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'
 }
 
