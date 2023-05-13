@@ -213,7 +213,7 @@ while : ; do
             ;;
     esac
 
-    echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
+    echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 
     if [ -z "$REPOLIST" ] ; then
         REPOLIST="$REPOLIST_PAGE"
@@ -235,7 +235,7 @@ $GIST_COMMENTLIST_PAGE"
 done
 
 $GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
-tgz_nonrepo "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata-${TSTAMP}.json"
+tgz_nonrepo "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
 
