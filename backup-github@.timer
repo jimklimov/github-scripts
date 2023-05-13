@@ -1,0 +1,18 @@
+[Unit]
+# Copy the timer and service files to /etc/systemd/system and activate
+# for each script definition (with credentials and other settings) like:
+#   systemctl enable backup-github@ghbu-Username.timer
+#
+# Note there is no activation for the "service", it is only called by timer
+#
+# Wraps instance scripts e.g. "ghbu-Username.sh"
+# as backup-github@ghbu-Username.service
+Description=GitHub backup routine for %i (timer)
+
+[Timer]
+OnCalendar=weekly
+AccuracySec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

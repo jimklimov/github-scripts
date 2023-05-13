@@ -1,0 +1,21 @@
+[Unit]
+# NOTE: To set up, copy to /etc/systemd/system and change
+# the "User" value and "ExecStart" path below!
+# Then see comments in the timer unit file to activate that.
+
+# Wraps instance scripts e.g. "ghbu-Username.sh"
+# as backup-github@ghbu-Username.service
+Description=GitHub backup routine for %i (script service)
+After=network.target local-fs.target
+
+[Service]
+ExecStart=/export/home/jim/github-backup/%i.sh
+Type=oneshot
+User=jim
+SyslogIdentifier=%N
+Restart=on-failure
+# Let intermittent errors like network availability back off:
+RestartSec=10m
+
+[Install]
+# Started by a timer unit
