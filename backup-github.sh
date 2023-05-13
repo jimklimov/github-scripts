@@ -67,7 +67,10 @@ function check {
 # The function `tgz` will create a gzipped tar archive of the specified
 # file ($1) and then optionally remove the original
 function tgz {
-    check tar zcf "$1.$TSTAMP.tar.gz" "$1" || return
+    check tar zcf "$1.$TSTAMP.tar.gz.__WRITING__" "$1" \
+    && check mv -f "$1.$TSTAMP.tar.gz.__WRITING__" "$1.$TSTAMP.tar.gz" \
+    || return
+
     if ! $GHBU_REUSE_REPOS ; then
         check rm -rf "$1"
     fi
@@ -162,11 +165,11 @@ while : ; do
     case x"$GHBU_ORGMODE" in
         xorg*|xuser*)
             # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
-            JSON="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q)"
+            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
-            JSON="$(check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             GIST_COMMENTLIST_PAGE="$(echo "$JSON" | filter_gist_comments)"
             ;;
@@ -213,7 +216,7 @@ for REPO in $REPOLIST; do
 
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
             DIRNAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
-            check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" \
+            check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
                 "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" -q \
             > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
             ;;
@@ -224,7 +227,7 @@ done
 for COMMENT_URL in $GIST_COMMENTLIST; do
     $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments"
     DIRNAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
-    check curl --silent -u "$GHBU_UNAME:$GHBU_PASSWD" \
+    check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
         "${COMMENT_URL}" -q \
     > "${DIRNAME}" && GHBU_REUSE_REPOS=false tgz "${DIRNAME}"
 done
@@ -233,7 +236,7 @@ done
 # GitHub going AWOL and us deleting all backups after 3 days would be folly!
 # (Less of a problem if we do keep the repos, but comments/issues/medatata
 # are still at risk - maybe GIT their evolution locally?)
-if $GHBU_PRUNE_OLD; then
+if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -gt 0 ]; then
     $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
     $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
     $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
