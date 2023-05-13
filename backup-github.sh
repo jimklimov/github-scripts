@@ -47,6 +47,7 @@ GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to 
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
 GHBU_REUSE_REPOS=${GHBU_REUSE_REPOS-false}                           # as part of backup process, we mirror-clone remote git repos; should we keep and reuse them for next backups (true), or always snatch from scratch (false)?
 GHBU_PRUNE_INCOMPLETE=${GHBU_PRUNE_INCOMPLETE-false}                 # when `true`, backups named like *.__WRITING__ will be deleted when script starts (set `false` if using same GHBU_BACKUP_DIR for several scripts running in parallel)
+GHBU_PRUNE_PREV=${GHBU_PRUNE_PREV-false}                             # when `true`, only the "*.latest.tar.gz" backups will be tracked; when `false` also the `*.prev.tar.gz"
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages
@@ -83,9 +84,14 @@ function tgz {
         check rm -rf "$1"
     fi
 
-    rm -f "$1.latest.tar.gz" || true
-    # Let one copy survive the auto-prune
-    ln "$1.$TSTAMP.tar.gz" "$1.latest.tar.gz"
+    # Let one copy (or two if "prev" is used) survive the auto-prune
+    if $GHBU_PRUNE_PREV ; then
+        rm -f "$1.prev.tar.gz" || true
+        rm -f "$1.latest.tar.gz" || true
+    else
+        mv -f "$1.latest.tar.gz" "$1.prev.tar.gz" || true
+    fi
+    check ln "$1.$TSTAMP.tar.gz" "$1.latest.tar.gz"
 }
 
 # The function `getdir` will return the repo directory name on stdout
@@ -257,8 +263,8 @@ done
 if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -gt 0 ]; then
     $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
     $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
-    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
-    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*latest.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
+    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
+    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
 fi
 
 $GHBU_SILENT || (echo "" && echo "=== DONE ===" && echo "")
