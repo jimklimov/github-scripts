@@ -6,7 +6,7 @@
 # Note there is no activation for the "service", it is only called by timer
 #
 # You can however run it manually for one-off tests, like
-#   systemctl start backup-github@ghbu-Username.service
+#   systemctl start --no-block backup-github@ghbu-Username.service
 # which should ensure that a copy only runs once at a time.
 #
 # Wraps instance scripts e.g. "ghbu-Username.sh"
