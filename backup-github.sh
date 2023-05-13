@@ -106,6 +106,17 @@ function tgz_nonrepo {
     tgz "$@"
 }
 
+# Optionally delete files with a __WRITING__ extension,
+# likely abandoned due to run-time errors like a reboot,
+# Ctrl+C, connection loss, disk space...
+function prune_incomplete {
+    if $GHBU_PRUNE_INCOMPLETE ; then
+        $GHBU_SILENT || (echo "" && echo "=== PRUNING INCOMPLETE LEFTOVERS (if any) ===" && echo "")
+        $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' | wc -l` files to prune."
+        find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' -exec rm -fv {} > /dev/null \;
+    fi
+}
+
 # The function `getdir` will return the repo directory name on stdout
 # if successful (it depends on GHBU_REUSE_REPOS value).
 function getdir {
@@ -203,11 +214,7 @@ $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 $GHBU_SILENT || echo "Using backup directory $GHBU_BACKUP_DIR"
 check mkdir -p $GHBU_BACKUP_DIR
 
-if $GHBU_PRUNE_INCOMPLETE ; then
-    $GHBU_SILENT || (echo "" && echo "=== PRUNING INCOMPLETE LEFTOVERS (if any) ===" && echo "")
-    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' | wc -l` files to prune."
-    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' -exec rm -fv {} > /dev/null \;
-fi
+prune_incomplete
 
 $GHBU_SILENT || echo -n "Fetching list of repositories for ${GHBU_ORG}..."
 
@@ -332,6 +339,7 @@ if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -ge 0 ]; then
     $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
     find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime "+${GHBU_PRUNE_AFTER_N_DAYS}" -exec rm -fv {} > /dev/null \;
 fi
+prune_incomplete
 
 $GHBU_SILENT || (echo "" && echo "=== DONE ===" && echo "")
 $GHBU_SILENT || (echo "GitHub backup completed." && echo "")
