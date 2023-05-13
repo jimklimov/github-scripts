@@ -12,16 +12,17 @@
 #   Replace the `<CHANGE-ME>` strings with the value described in the comments
 #   (or overwrite those values at run-time by providing environment variables).
 #
-# * If you have more than 100 repositories, you'll need to step thru the list
-#   of repos returned by GitHub one page at a time, as described at
-#   https://gist.github.com/darktim/5582423
+# * If you have more than 100 repositories, the script should be able to
+#   step thru the list of repos returned by GitHub one page at a time,
+#   beware API limits (server-side throttling); maybe support for HTTP-304
+#   cache would be beneficial (also to avoid fetches that bring no news?)
 #
 # * If you want to back up the repos for a USER rather than an ORGANIZATION,
-#   there's a small change needed. See the comment on the `REPOLIST` definition
-#   below (i.e search for "REPOLIST" and make the described change).
+#   or a user's gists (and their comments), see GHBU_ORGMODE setting below.
 #
-# * Thanks to @Calrion, @vnaum, @BartHaagdorens and other commenters below for
-#   various fixes and updates.
+# * Thanks to @rodw for the original script, and to @Calrion, @vnaum,
+#   @BartHaagdorens and other commenters in original gist for various fixes
+#   and updates.
 #
 # * Also see those comments (and related revisions and forks) for more
 #   information and general troubleshooting.
