@@ -363,4 +363,4 @@ fi
 prune_incomplete
 
 $GHBU_SILENT || (echo "" && echo "=== DONE ===" && echo "")
-$GHBU_SILENT || (echo "GitHub backup completed." && echo "")
+$GHBU_SILENT || (echo "GitHub backup for ${GHBU_ORG} (${GHBU_ORGMODE}) completed." && echo "")
