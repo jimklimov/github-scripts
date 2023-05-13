@@ -39,6 +39,7 @@ GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "u
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files
 GHBU_GITHOST=${GHBU_GITHOST-"github.com"}                            # the GitHub hostname (see comments)
 GHBU_REUSE_REPOS=${GHBU_REUSE_REPOS-false}                           # as part of backup process, we mirror-clone remote git repos; should we keep and reuse them for next backups (true), or always snatch from scratch (false)?
+GHBU_PRUNE_INCOMPLETE=${GHBU_PRUNE_INCOMPLETE-false}                 # when `true`, backups named like *.__WRITING__ will be deleted when script starts (set `false` if using same GHBU_BACKUP_DIR for several scripts running in parallel)
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages 
@@ -139,6 +140,12 @@ $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 
 $GHBU_SILENT || echo "Using backup directory $GHBU_BACKUP_DIR"
 check mkdir -p $GHBU_BACKUP_DIR
+
+if $GHBU_PRUNE_INCOMPLETE ; then
+    $GHBU_SILENT || (echo "" && echo "=== PRUNING INCOMPLETE LEFTOVERS (if any) ===" && echo "")
+    $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' | wc -l` files to prune."
+    find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' -exec rm -fv {} > /dev/null \;
+fi
 
 $GHBU_SILENT || echo -n "Fetching list of repositories for ${GHBU_ORG}..."
 
