@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # A simple script to backup an organization's GitHub repositories.
 # Initially from https://gist.github.com/rodw/3073987 snapshot at
 # https://gist.githubusercontent.com/rodw/3073987/raw/d5e9ab4785647e558df488eb18623aa6c52af86b/backup-github.sh
@@ -11,19 +11,19 @@
 #   parameters that must be personalized for your GitHub account and org.
 #   Replace the `<CHANGE-ME>` strings with the value described in the comments
 #   (or overwrite those values at run-time by providing environment variables).
-#   
+#
 # * If you have more than 100 repositories, you'll need to step thru the list
-#   of repos returned by GitHub one page at a time, as described at 
+#   of repos returned by GitHub one page at a time, as described at
 #   https://gist.github.com/darktim/5582423
 #
-# * If you want to back up the repos for a USER rather than an ORGANIZATION, 
+# * If you want to back up the repos for a USER rather than an ORGANIZATION,
 #   there's a small change needed. See the comment on the `REPOLIST` definition
 #   below (i.e search for "REPOLIST" and make the described change).
 #
 # * Thanks to @Calrion, @vnaum, @BartHaagdorens and other commenters below for
 #   various fixes and updates.
 #
-# * Also see those comments (and related revisions and forks) for more 
+# * Also see those comments (and related revisions and forks) for more
 #   information and general troubleshooting.
 #-------------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@
 GHBU_ORG=${GHBU_ORG-"<CHANGE-ME>"}                                   # the GitHub organization whose repos will be backed up
 #                                                                    # (if you're backing up a USER's repos, this should be your GitHub username; also see the note below about the `REPOLIST` definition)
 GHBU_UNAME=${GHBU_UNAME-"<CHANGE-ME>"}                               # the username of a GitHub account (to use with the GitHub API)
-GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the password for that account 
+GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the password for that account
 #-------------------------------------------------------------------------------
 GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "user" or "gists"?
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files; avoid using ":" in the name (confuses tar as a hostname; confuses Windows as a drive letter)
@@ -42,7 +42,7 @@ GHBU_REUSE_REPOS=${GHBU_REUSE_REPOS-false}                           # as part o
 GHBU_PRUNE_INCOMPLETE=${GHBU_PRUNE_INCOMPLETE-false}                 # when `true`, backups named like *.__WRITING__ will be deleted when script starts (set `false` if using same GHBU_BACKUP_DIR for several scripts running in parallel)
 GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `true`, old backups will be deleted
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
-GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages 
+GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
 GHBU_GIT_CLONE_CMD="git clone --quiet --mirror "                     # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
