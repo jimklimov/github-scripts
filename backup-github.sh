@@ -186,7 +186,14 @@ function getgit (
                 ${GHBU_GIT_CLONE_CMD} "${REPOURI}" "${DIRNAME}" || return
                 ;;
             *) # Just a repo name - complete it with data we know of
-                ${GHBU_GIT_CLONE_CMD_SSH}"${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}" || return
+                ${GHBU_GIT_CLONE_CMD_SSH}"${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}" \
+                || { # Errors were seen above, so no GHBU_SILENT here:
+                    echo "..... Attempt a retry over HTTPS" >&2
+                    # FIXME: Effectively we craft the clone_url
+                    # here, rather than using one from metadata
+                    ${GHBU_GIT_CLONE_CMD} "https://${GHBU_GITHOST}/${GHBU_ORG}/${REPOURI}" "${DIRNAME}" \
+                    && echo "..... Attempt a retry over HTTPS: SUCCEEDED" >&2 ; \
+                } || return
                 ;;
         esac
     fi
