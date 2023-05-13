@@ -12,6 +12,12 @@
 #   Replace the `<CHANGE-ME>` strings with the value described in the comments
 #   (or overwrite those values at run-time by providing environment variables).
 #
+# * Your terminal/screen session used for backups would benefit from having
+#   your SSH key preloaded into the ssh-agent, e.g.:
+#      eval `ssh-agent`
+#      ssh-add ~/.ssh/id_rsa
+#   or otherwise made available to the git client (no passphrase? oh no!)
+#
 # * If you have more than 100 repositories, the script should be able to
 #   step thru the list of repos returned by GitHub one page at a time,
 #   beware API limits (server-side throttling); maybe support for HTTP-304
