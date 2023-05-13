@@ -238,7 +238,13 @@ while : ; do
     case x"$GHBU_ORGMODE" in
         xorg*|xuser*)
             # hat tip to https://gist.github.com/rodw/3073987#gistcomment-3217943 for the license name workaround
-            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM" -q)"
+            # The "type=owner" should be default per https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-a-user
+            # but with a powerful token a "user" backup may see all repos
+            # one has access to (collaborating in other orgs). Other than
+            # lots of noise and more time to get the listing, this leads
+            # to broken backup cycles when we try to fetch repo names that
+            # are not known under this user's personal namespace.
+            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
