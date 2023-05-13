@@ -55,7 +55,6 @@ GHBU_SILENT=${GHBU_SILENT-false}                                     # when `tru
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
 GHBU_GIT_CLONE_CMD="GITCMD clone --quiet --mirror "                  # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
-GHBU_GIT_UPDATE_CMD="GITCMD fetch --quiet --all && GITCMD fetch --quiet --tags "       # base command to update an existing repo (if reusing)
 TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
@@ -171,14 +170,20 @@ function getgit (
     case x"$1" in
         xhttp://*|xhttps://*)
             # Prepare HTTP(S) credential support for this git operation.
-            CRED_HELPER='!f() { echo "username=$GHBU_UNAME"; echo "password=$GHBU_PASSWD"; }; f'
+            local CRED_HELPER='!f() { echo "username=$GHBU_UNAME"; echo "password=$GHBU_PASSWD"; }; f'
             export CRED_HELPER GHBU_UNAME GHBU_PASSWD
             ;;
     esac
 
     if $GHBU_REUSE_REPOS && [ -d "${DIRNAME}" ] ; then
+        # Update an existing repo (if reusing)
         $GHBU_SILENT || echo "... Updating $REPOURI clone in $DIRNAME"
-        (cd "${DIRNAME}" && $GHBU_GIT_UPDATE_CMD) || return
+        # Note "fatal: fetch --all does not make sense with refspecs" likely in the mirror:
+        (cd "${DIRNAME}" && {
+            GITCMD fetch --quiet --tags \
+            && GITCMD fetch --quiet --all \
+            || GITCMD fetch --quiet
+        }) || return
     else
         $GHBU_SILENT || echo "... Cloning $REPOURI into $DIRNAME"
         case x"$1" in
