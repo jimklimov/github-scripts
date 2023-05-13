@@ -53,9 +53,9 @@ GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `tru
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
-GHBU_GIT_CLONE_CMD="git clone --quiet --mirror "                     # base command to use to clone GitHub repos from an URL (may need more info for SSH)
+GHBU_GIT_CLONE_CMD="GITCMD clone --quiet --mirror "                  # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
-GHBU_GIT_UPDATE_CMD="git fetch --quiet --all && git fetch --quiet --tags"       # base command to update an existing repo (if reusing)
+GHBU_GIT_UPDATE_CMD="GITCMD fetch --quiet --all && GITCMD fetch --quiet --tags "       # base command to update an existing repo (if reusing)
 TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
@@ -130,22 +130,51 @@ function getdir {
     echo "$DIRNAME"
 }
 
+# See coments below
+function GITCMD {
+    if [ -z "$CRED_HELPER" ] ; then
+        git "$@"
+    else
+        # Note the deletion of credential.helper first, it is multivalued
+        # Per https://stackoverflow.com/a/70963737 explanation:
+        # > The additional empty value for credential.helper causes any
+        # > existing credential helpers to be removed, preventing the
+        # > addition of this token into the user's credential helper.
+        # > If you'd like the user to be able to save it, then remove
+        # > that directive.
+        # In our case, the first HTTP(S) download would block asking for
+        # user/pass; however a "credential.helper=cache --timeout=360000"
+        # might help subsequent activities (and/or corrupt them, if we use
+        # different credentials for backups and/or interactive development).
+        git -c credential.helper= -c credential.helper="$CRED_HELPER" "$@"
+    fi
+}
+
 # The function `getgit` will clone (or update) specified repo ($1, without
 # a `.git` suffix) into specified directory ($2)
-function getgit {
+function getgit (
+    # Sub-shelled to constrain "export" visibility of credentials
     local REPOURI="$1"
     local DIRNAME="$2"
 
+    case x"$1" in
+        xhttp://*|xhttps://*)
+            # Prepare HTTP(S) credential support for this git operation.
+            CRED_HELPER='!f() { echo "username=$GHBU_UNAME"; echo "password=$GHBU_PASSWD"; }; f'
+            export CRED_HELPER GHBU_UNAME GHBU_PASSWD
+            ;;
+    esac
+
     if $GHBU_REUSE_REPOS && [ -d "${DIRNAME}" ] ; then
         $GHBU_SILENT || echo "... Updating $REPOURI clone in $DIRNAME"
-        (cd "${DIRNAME}" && eval $GHBU_GIT_UPDATE_CMD) || return
+        (cd "${DIRNAME}" && $GHBU_GIT_UPDATE_CMD) || return
     else
         $GHBU_SILENT || echo "... Cloning $REPOURI into $DIRNAME"
         case x"$1" in
             x*@*|x*://*) # URL already; .git suffix should be irrelevant
                 ${GHBU_GIT_CLONE_CMD} "${REPOURI}" "${DIRNAME}" || return
                 ;;
-            *) # Just a repo name
+            *) # Just a repo name - complete it with data we know of
                 ${GHBU_GIT_CLONE_CMD_SSH}"${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}" || return
                 ;;
         esac
@@ -153,7 +182,7 @@ function getgit {
 
     # Return a success either way here:
     $GHBU_SILENT || echo "+++ Received $REPOURI into $DIRNAME"
-}
+)
 
 function filter_user_org {
     check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'
