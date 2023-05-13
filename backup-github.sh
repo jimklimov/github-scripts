@@ -47,7 +47,7 @@ GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI 
 GHBU_GIT_CLONE_CMD="git clone --quiet --mirror "                     # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
 GHBU_GIT_UPDATE_CMD="git fetch --quiet --all && git fetch --quiet --tags"       # base command to update an existing repo (if reusing)
-TSTAMP=`date "+%Y%m%d-%H%M"`                                         # format of timestamp suffix appended to archived files
+TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
 #-------------------------------------------------------------------------------
