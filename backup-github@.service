@@ -9,6 +9,9 @@
 # (note that as a oneshot service, it "blocks" in "activating"
 # state until finished).
 #
+# You can revise known unit definitions (and their activity) with:
+#   systemctl list-units 'backup-github@*' --all
+#
 # Wraps instance scripts e.g. "ghbu-Username.sh"
 # as backup-github@ghbu-Username.service
 Description=GitHub backup routine for %i (script service)
