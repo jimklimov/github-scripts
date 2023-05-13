@@ -270,7 +270,8 @@ for COMMENT_URL in $GIST_COMMENTLIST; do
     > "${DIRNAME}" && tgz_nonrepo "${DIRNAME}"
 done
 
-# FIXME: Leave at least one backup for each timestamped item sequence!
+# NOTE: the "latest" and optional "prev" handling below allows us to leave at
+# least one (better two) backup tarballs for each timestamped item sequence.
 # GitHub going AWOL and us deleting all backups after 3 days would be folly!
 # (Less of a problem if we do keep the repos, but comments/issues/medatata
 # are still at risk - maybe GIT their evolution locally?)
