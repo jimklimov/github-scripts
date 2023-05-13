@@ -54,15 +54,15 @@ TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of
 
 # The function `check` will exit the script if the given command fails.
 function check {
-  "$@"
-  status=$?
-  if [ $status -ne 0 ]; then
-    echo "ERROR: Encountered error (${status}) while running the following:" >&2
-    echo "           $@"  >&2
-    echo "       (at line ${BASH_LINENO[0]} of file $0.)"  >&2
-    echo "       Aborting." >&2
-    exit $status
-  fi
+    "$@"
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo "ERROR: Encountered error (${status}) while running the following:" >&2
+        echo "           $@"  >&2
+        echo "       (at line ${BASH_LINENO[0]} of file $0.)"  >&2
+        echo "       Aborting." >&2
+        exit $status
+    fi
 }
 
 # The function `tgz` will create a gzipped tar archive of the specified
