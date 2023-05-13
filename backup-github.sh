@@ -294,14 +294,18 @@ $GIST_COMMENTLIST_PAGE"
     $GHBU_SILENT || echo -n " Fetching next page of repos: $PAGENUM..."
 done
 
-$GHBU_SILENT || echo " found `echo $REPOLIST | wc -w` repositories."
+REPOS_COUNT=0
+REPOS_TOTAL="`echo $REPOLIST | wc -w`"
+$GHBU_SILENT || echo " found $REPOS_TOTAL repositories."
+
 mv -f "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__" "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 tgz_nonrepo "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json"
 
 $GHBU_SILENT || (echo "" && echo "=== BACKING UP ===" && echo "")
 
 for REPO in $REPOLIST; do
-    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO}"
+    REPOS_COUNT=$(($REPOS_COUNT+1))
+    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} ($REPOS_COUNT of $REPOS_TOTAL)"
     DIRNAME="`getdir "$REPO"`"
     check getgit "${REPO}" "${DIRNAME}" && tgz "${DIRNAME}"
 
@@ -325,8 +329,11 @@ for REPO in $REPOLIST; do
 done
 
 # Assumes GHBU_ORGMODE=gist, but no reason to constrain:
+COMMENT_COUNT=0
+COMMENT_TOTAL="`echo $GIST_COMMENTLIST | wc -w`"
 for COMMENT_URL in $GIST_COMMENTLIST; do
-    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments"
+    COMMENT_COUNT=$(($COMMENT_COUNT+1))
+    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments ($COMMENT_COUNT of $COMMENT_TOTAL)"
     FILENAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
     check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
         "${COMMENT_URL}" -q \
