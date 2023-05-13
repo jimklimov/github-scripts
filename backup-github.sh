@@ -275,7 +275,12 @@ done
 # GitHub going AWOL and us deleting all backups after 3 days would be folly!
 # (Less of a problem if we do keep the repos, but comments/issues/medatata
 # are still at risk - maybe GIT their evolution locally?)
-if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -gt 0 ]; then
+
+# NOTE: according to `man find` (GNU, comments to `-atime` et al handling),
+# the fractional parts of "n*24 hours" are ignored, "so to match -atime +1,
+# a file has to have been accessed at least two days ago".
+# This way, GHBU_PRUNE_AFTER_N_DAYS=0 only chops files older than 24 hours.
+if $GHBU_PRUNE_OLD && [ "${GHBU_PRUNE_AFTER_N_DAYS}" -ge 0 ]; then
     $GHBU_SILENT || (echo "" && echo "=== PRUNING ===" && echo "")
     $GHBU_SILENT || echo "Pruning backup files ${GHBU_PRUNE_AFTER_N_DAYS} days old or older."
     $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.tar.gz' -a \! -name '*.prev.tar.gz' -a \! -name '*.latest.tar.gz' -mtime +${GHBU_PRUNE_AFTER_N_DAYS} | wc -l` files to prune."
