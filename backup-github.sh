@@ -92,7 +92,9 @@ function tgz {
         rm -f "$1.prev.tar.gz" || true
         rm -f "$1.latest.tar.gz" || true
     else
-        mv -f "$1.latest.tar.gz" "$1.prev.tar.gz" || true
+        if [ -e "$1.latest.tar.gz" ] ; then
+            mv -f "$1.latest.tar.gz" "$1.prev.tar.gz" || true
+        fi
     fi
     check ln "$1.$TSTAMP.tar.gz" "$1.latest.tar.gz"
 }
