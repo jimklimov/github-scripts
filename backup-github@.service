@@ -11,6 +11,8 @@
 #
 # You can revise known unit definitions (and their activity) with:
 #   systemctl list-units 'backup-github@*' --all
+# or view more detailed status and last-log summaries with:
+#   systemctl status -l -n30 'backup-github@*' --all
 #
 # Wraps instance scripts e.g. "ghbu-Username.sh"
 # as backup-github@ghbu-Username.service
