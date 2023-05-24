@@ -237,7 +237,13 @@ case x"$GHBU_ORGMODE" in
         ;;
     x"user"|x"users")
         # NOTE: if you're backing up a *user's* repos, not an organizations, use this instead:
-        GHBU_ORG_URI="/user"
+        if [ "${GHBU_ORG}" = "${GHBU_UNAME}" ] ; then
+            # Backing up ourselves
+            GHBU_ORG_URI="/user"
+        else
+            # Backing up a friend/alter-ego (using our login)
+            GHBU_ORG_URI="/users/${GHBU_ORG}"
+        fi
         ;;
     x"org"|*)   # Legacy default
         GHBU_ORG_URI="/orgs/${GHBU_ORG}"
