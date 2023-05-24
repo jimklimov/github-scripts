@@ -334,7 +334,7 @@ COMMENT_COUNT=0
 COMMENT_TOTAL="`echo $GIST_COMMENTLIST | wc -w`"
 for COMMENT_URL in $GIST_COMMENTLIST; do
     COMMENT_COUNT=$(($COMMENT_COUNT+1))
-    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} comments ($COMMENT_COUNT of $COMMENT_TOTAL)"
+    $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${COMMENT_URL} comments ($COMMENT_COUNT of $COMMENT_TOTAL)"
     FILENAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
     check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
         "${COMMENT_URL}" -q \
