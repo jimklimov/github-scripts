@@ -55,6 +55,7 @@ GHBU_SILENT=${GHBU_SILENT-false}                                     # when `tru
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
 GHBU_GIT_CLONE_CMD="GITCMD clone --quiet --mirror "                  # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
+GHBU_FAILFAST_GETGIT="${GHBU_FAILFAST_GETGIT-true}"                  # if true, repeated failure of getgit() will fail the script; if false - go over other repos
 TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
@@ -314,7 +315,17 @@ for REPO in $REPOLIST; do
     REPOS_COUNT=$(($REPOS_COUNT+1))
     $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} ($REPOS_COUNT of $REPOS_TOTAL)"
     DIRNAME="`getdir "$REPO"`"
-    check getgit "${REPO}" "${DIRNAME}" && tgz "${DIRNAME}"
+    { getgit "${REPO}" "${DIRNAME}" || {
+        echo "FAILED to getgit '${REPO}' '${DIRNAME}': will sleep in case it is about the usage quota and try again"
+        sleep 120
+        if [ x"$GHBU_FAILFAST_GETGIT" = xtrue ]; then
+            echo "RETRY getgit '${REPO}' '${DIRNAME}': failure now WILL BE FATAL"
+            check getgit "${REPO}" "${DIRNAME}"
+        else
+            echo "RETRY getgit '${REPO}' '${DIRNAME}': failure now will NOT be fatal"
+            getgit "${REPO}" "${DIRNAME}"
+        fi
+    } ; } && tgz "${DIRNAME}"
 
     # No wikis nor issues for gists; but there are comments (see another loop)
     case x"$GHBU_ORGMODE" in
