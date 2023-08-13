@@ -440,7 +440,7 @@ for REPO in $REPOLIST; do
                 SUB_FILENAME="`echo "$SUB_URL" | sed -e "s,^${GHBU_API}/repos/${GHBU_ORG}/${REPO}/,," -e 's,[:/],-,g'`.json"
                 # Skip user metadata
                 case "$SUB_FILENAME" in
-                    http---*|https---*) continue ;;
+                    http---*|https---*|*"{-"*"}"*) continue ;;
                 esac
                 $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issue or pull request details from: ${SUB_URL}"
                 FILENAME="${DIRNAME}/${SUB_FILENAME}" APIURL="${SUB_URL}" \
