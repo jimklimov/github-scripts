@@ -234,10 +234,16 @@ function get_multipage_file {
         # ex. APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues"
         # ex. APIQUERY_SUFFIX="&state=all"
         # Defaults to showing newest issues first
-        check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+        curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
         > "${FILENAME}.__WRITING__" \
-        || { MULTIPAGE_OK=false; break; }
+        || {
+            echo "FAILED to fetch '${APIURL}' once: will sleep in case it is about the usage quota and try again"
+            sleep 120
+            check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+                "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
+            > "${FILENAME}.__WRITING__"
+        } || { MULTIPAGE_OK=false; break; }
 
         # ex. ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"'
         NUM="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}.__WRITING__"`"
