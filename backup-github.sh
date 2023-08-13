@@ -223,6 +223,50 @@ function filter_gist_comments {
     check sed -n 's/.*comments_url": "\(.*\)",/\1/p'
 }
 
+function get_multipage_file {
+    # Uses caller envvars FILENAME, APIURL, APIQUERY_SUFFIX, ENTRYID_REGEX
+    # Returns MULTIPAGE_NUM, MULTIPAGE_OK, ENTRY_COUNT
+    rm -f "$FILENAME" || true
+    MULTIPAGE_NUM=1
+    MULTIPAGE_OK=true
+    ENTRY_COUNT=0
+    while : ; do
+        # ex. APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues"
+        # ex. APIQUERY_SUFFIX="&state=all"
+        # Defaults to showing newest issues first
+        check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+            "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
+        > "${FILENAME}.__WRITING__" \
+        || { MULTIPAGE_OK=false; break; }
+
+        # ex. ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"'
+        NUM="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}.__WRITING__"`"
+        ENTRY_COUNT="`expr $ENTRY_COUNT + $NUM`"
+
+        if [ ! -e "${FILENAME}" ] ; then
+            mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
+        else
+            (head -n -2 "${FILENAME}" && \
+             echo "  }," && \
+             tail -n +2 "${FILENAME}.__WRITING__"
+            ) > "${FILENAME}.__WRITING__.tmp" \
+            || { MULTIPAGE_OK=false; break; }
+
+            mv -f "${FILENAME}.__WRITING__.tmp" "${FILENAME}"
+            rm -f "${FILENAME}.__WRITING__"
+        fi
+
+        if [ $NUM -lt 100 ] ; then
+            # Last page
+            break
+        fi
+        MULTIPAGE_NUM="`expr $MULTIPAGE_NUM + 1`"
+    done
+
+    # Return status
+    $MULTIPAGE_OK
+}
+
 $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 
 $GHBU_SILENT || echo "Using backup directory $GHBU_BACKUP_DIR"
@@ -335,81 +379,35 @@ for REPO in $REPOLIST; do
             # Failure is an option for wikis:
             getgit "${REPO}.wiki" "${DIRNAME}" 2>/dev/null && tgz "${DIRNAME}"
 
+            # NOTE: While internally issues and PRs seem to be the same,
+            # at least using the same numbering and responding with them
+            # to either URL (can discern by "html_url"), they are both
+            # listed via both numbers: all entities are in "issues" but
+            # only PRs (with partially different metadata) are in "pulls".
+
+            # List of issues:
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
-            FILENAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
-            rm -f "$FILENAME" || true
-            PAGENUM=1
-            ISSUES_OK=true
-            ISSUES_COUNT=0
-            while : ; do
-                # Defaults to showing newest issues first
-                check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
-                    "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues?state=all&per_page=100&page=$PAGENUM" -q \
-                > "${FILENAME}.__WRITING__" \
-                || { ISSUES_OK=false; break; }
+            ISSUES_FILENAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
+            FILENAME="${ISSUES_FILENAME}" \
+                APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" \
+                APIQUERY_SUFFIX="&state=all" \
+                ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' \
+                get_multipage_file
+            $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} issues in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
+            $MULTIPAGE_OK && tgz_nonrepo "${ISSUES_FILENAME}"
+            ISSUES_OK="$MULTIPAGE_OK"
 
-                NUM="`grep -Ec '"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' < "${FILENAME}.__WRITING__"`"
-                ISSUES_COUNT="`expr $ISSUES_COUNT + $NUM`"
-
-                if [ ! -e "${FILENAME}" ] ; then
-                    mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
-                else
-                    (head -n -2 "${FILENAME}" && \
-                     echo "  }," && \
-                     tail -n +2 "${FILENAME}.__WRITING__"
-                    ) > "${FILENAME}.__WRITING__.tmp" \
-                    || { ISSUES_OK=false; break; }
-
-                    mv -f "${FILENAME}.__WRITING__.tmp" "${FILENAME}"
-                    rm -f "${FILENAME}.__WRITING__"
-                fi
-
-                if [ $NUM -lt 100 ] ; then
-                    # Last page
-                    break
-                fi
-                PAGENUM="`expr $PAGENUM + 1`"
-            done
-            echo "Collected $ISSUES_COUNT issues in $PAGENUM pages for ${GHBU_ORG}/${REPO}; overall success: $ISSUES_OK"
-            $ISSUES_OK && tgz_nonrepo "${FILENAME}"
-
+            # List of PRs:
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} pull requests"
-            FILENAME="`getdir "$REPO.pulls" | sed 's,.git$,,'`"
-            rm -f "$FILENAME" || true
-            PAGENUM=1
-            PULLS_OK=true
-            PULLS_COUNT=0
-            while : ; do
-                # Defaults to showing newest issues first
-                check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
-                    "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?state=all&per_page=100&page=$PAGENUM" -q \
-                > "${FILENAME}.__WRITING__" \
-                || { PULLS_OK=false; break; }
-
-                NUM="`grep -Ec '"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' < "${FILENAME}.__WRITING__"`"
-                PULLS_COUNT="`expr $PULLS_COUNT + $NUM`"
-
-                if [ ! -e "${FILENAME}" ] ; then
-                    mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
-                else
-                    (head -n -2 "${FILENAME}" && \
-                     echo "  }," && \
-                     tail -n +2 "${FILENAME}.__WRITING__"
-                    ) > "${FILENAME}.__WRITING__.tmp" \
-                    || { PULLS_OK=false; break; }
-
-                    mv -f "${FILENAME}.__WRITING__.tmp" "${FILENAME}"
-                    rm -f "${FILENAME}.__WRITING__"
-                fi
-
-                if [ $NUM -lt 100 ] ; then
-                    # Last page
-                    break
-                fi
-                PAGENUM="`expr $PAGENUM + 1`"
-            done
-            echo "Collected $PULLS_COUNT pull requests in $PAGENUM pages for ${GHBU_ORG}/${REPO}; overall success: $PULLS_OK"
-            $PULLS_OK && tgz_nonrepo "${FILENAME}"
+            PULLS_FILENAME="`getdir "$REPO.pulls" | sed 's,.git$,,'`"
+            FILENAME="${PULLS_FILENAME}" \
+                APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls" \
+                APIQUERY_SUFFIX="&state=all" \
+                ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' \
+                get_multipage_file
+            $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} pull requests in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
+            $MULTIPAGE_OK && tgz_nonrepo "${PULLS_FILENAME}"
+            PULLS_OK="$MULTIPAGE_OK"
             ;;
     esac
 done
