@@ -238,10 +238,13 @@ function get_multipage_file {
     while : ; do
         # ex. APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues"
         # ex. APIQUERY_SUFFIX="&state=all"
-        # Defaults to showing newest issues first
+        # Also note: https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#user-agent-required
+        # hence `the User-Agent: username`
+        # Ordering defaults to showing newest issues first
         CURLRES=0
         rm -f "${FILENAME}.headers" || true
         curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+            -H "User-Agent: ${GHBU_UNAME}" \
             ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
         > "${FILENAME}.__WRITING__" \
@@ -249,6 +252,7 @@ function get_multipage_file {
             echo "FAILED to fetch '${APIURL}' once: will sleep in case it is about the usage quota and try again"
             sleep 120
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+                -H "User-Agent: ${GHBU_UNAME}" \
                 ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
                 "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
             > "${FILENAME}.__WRITING__"
@@ -344,11 +348,11 @@ while : ; do
             # lots of noise and more time to get the listing, this leads
             # to broken backup cycles when we try to fetch repo names that
             # are not known under this user's personal namespace.
-            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
+            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
-            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             GIST_COMMENTLIST_PAGE="$(echo "$JSON" | filter_gist_comments)"
             ;;
@@ -487,6 +491,7 @@ for COMMENT_URL in $GIST_COMMENTLIST; do
     $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${COMMENT_URL} comments ($COMMENT_COUNT of $COMMENT_TOTAL)"
     FILENAME="`getdir "${COMMENT_URL}.comments" | sed 's,.git$,,'`"
     check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+        -H "User-Agent: ${GHBU_UNAME}" \
         "${COMMENT_URL}" -q \
     > "${FILENAME}.__WRITING__" \
     && mv -f "${FILENAME}.__WRITING__" "${FILENAME}" \
