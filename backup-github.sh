@@ -385,29 +385,67 @@ for REPO in $REPOLIST; do
             # listed via both numbers: all entities are in "issues" but
             # only PRs (with partially different metadata) are in "pulls".
 
+            DIRNAME="`getdir "$REPO.issues-and-pulls"`"
+            $GHBU_SILENT || echo "Preparing local git repo in '${DIRNAME}' to receive issue and PR data"
+            if [ -d "${DIRNAME}/.git" ]; then
+                ( cd "${DIRNAME}" && git checkout -f && git clean -fffdddxxx ) \
+                || check [ "$?" = 0 ]
+            else
+                check mkdir -p "${DIRNAME}" \
+                && ( cd "${DIRNAME}" && git init \
+                    && touch list-issues.json list-pulls.json \
+                    && git add list-issues.json list-pulls.json \
+                    && git commit -m 'Initial commit' ) \
+                || check [ "$?" = 0 ]
+            fi
+
             # List of issues:
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
-            ISSUES_FILENAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
+            ISSUES_FILENAME="${DIRNAME}/list-issues.json"
             FILENAME="${ISSUES_FILENAME}" \
                 APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" \
                 APIQUERY_SUFFIX="&state=all" \
                 ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' \
                 get_multipage_file
             $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} issues in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
-            $MULTIPAGE_OK && tgz_nonrepo "${ISSUES_FILENAME}"
+            $MULTIPAGE_OK && ( cd "${DIRNAME}" && git add "`basename "$ISSUES_FILENAME"`" ) || MULTIPAGE_OK=false
             ISSUES_OK="$MULTIPAGE_OK"
+            ISSUES_NUM="${ENTRY_COUNT}"
 
             # List of PRs:
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} pull requests"
-            PULLS_FILENAME="`getdir "$REPO.pulls" | sed 's,.git$,,'`"
+            PULLS_FILENAME="${DIRNAME}/list-pulls.json"
             FILENAME="${PULLS_FILENAME}" \
                 APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls" \
                 APIQUERY_SUFFIX="&state=all" \
                 ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' \
                 get_multipage_file
             $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} pull requests in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
-            $MULTIPAGE_OK && tgz_nonrepo "${PULLS_FILENAME}"
+            $MULTIPAGE_OK && ( cd "${DIRNAME}" && git add "`basename "$PULLS_FILENAME"`" ) || MULTIPAGE_OK=false
             PULLS_OK="$MULTIPAGE_OK"
+            PULLS_NUM="${ENTRY_COUNT}"
+
+            # Contents
+            ( $ISSUES_OK && grep '"comments_url"' "$ISSUES_FILENAME" || true
+              $PULLS_OK && grep -E '"(comments_url|review_comments_url|commits_url)"' "$PULLS_FILENAME" || true
+            ) | awk '{print $NF}' | sed -e 's,^",,' -e 's/",*$//' | sort -n | uniq | \
+            while IFS= read SUB_URL \
+            ; do
+                SUB_FILENAME="`echo "$SUB_URL" | sed -e "s,^${GHBU_API}/repos/${GHBU_ORG}/${REPO}/,," -e 's,[:/],-,g'`.json"
+                # Skip user metadata
+                case "$SUB_FILENAME" in
+                    http---*|https---*) continue ;;
+                esac
+                $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issue or pull request details from: ${SUB_URL}"
+                FILENAME="${DIRNAME}/${SUB_FILENAME}" APIURL="${SUB_URL}" \
+                    ENTRYID_REGEX='("sha": "[0-9a-f]{40}"|"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/(issues|pulls)/comments/[0-9]+"'")' \
+                    get_multipage_file \
+                && ( cd "${DIRNAME}" && git add "${SUB_FILENAME}" )
+            done
+
+            $PULLS_OK && $ISSUES_OK \
+            && ( cd "${DIRNAME}" && git commit -m "Update due to backup at `LANG=C LC_ALL=C TZ=UTC date -u`" ) \
+            && tgz "${DIRNAME}"
             ;;
     esac
 done
