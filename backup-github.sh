@@ -337,11 +337,79 @@ for REPO in $REPOLIST; do
 
             $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issues"
             FILENAME="`getdir "$REPO.issues" | sed 's,.git$,,'`"
-            check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
-                "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" -q \
-            > "${FILENAME}.__WRITING__" \
-            && mv -f "${FILENAME}.__WRITING__" "${FILENAME}" \
-            && tgz_nonrepo "${FILENAME}"
+            rm -f "$FILENAME" || true
+            PAGENUM=1
+            ISSUES_OK=true
+            ISSUES_COUNT=0
+            while : ; do
+                # Defaults to showing newest issues first
+                check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+                    "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues?state=all&per_page=100&page=$PAGENUM" -q \
+                > "${FILENAME}.__WRITING__" \
+                || { ISSUES_OK=false; break; }
+
+                NUM="`grep -Ec '"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' < "${FILENAME}.__WRITING__"`"
+                ISSUES_COUNT="`expr $ISSUES_COUNT + $NUM`"
+
+                if [ ! -e "${FILENAME}" ] ; then
+                    mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
+                else
+                    (head -n -2 "${FILENAME}" && \
+                     echo "  }," && \
+                     tail -n +2 "${FILENAME}.__WRITING__"
+                    ) > "${FILENAME}.__WRITING__.tmp" \
+                    || { ISSUES_OK=false; break; }
+
+                    mv -f "${FILENAME}.__WRITING__.tmp" "${FILENAME}"
+                    rm -f "${FILENAME}.__WRITING__"
+                fi
+
+                if [ $NUM -lt 100 ] ; then
+                    # Last page
+                    break
+                fi
+                PAGENUM="`expr $PAGENUM + 1`"
+            done
+            echo "Collected $ISSUES_COUNT issues in $PAGENUM pages for ${GHBU_ORG}/${REPO}; overall success: $ISSUES_OK"
+            $ISSUES_OK && tgz_nonrepo "${FILENAME}"
+
+            $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} pull requests"
+            FILENAME="`getdir "$REPO.pulls" | sed 's,.git$,,'`"
+            rm -f "$FILENAME" || true
+            PAGENUM=1
+            PULLS_OK=true
+            PULLS_COUNT=0
+            while : ; do
+                # Defaults to showing newest issues first
+                check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+                    "${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?state=all&per_page=100&page=$PAGENUM" -q \
+                > "${FILENAME}.__WRITING__" \
+                || { PULLS_OK=false; break; }
+
+                NUM="`grep -Ec '"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' < "${FILENAME}.__WRITING__"`"
+                PULLS_COUNT="`expr $PULLS_COUNT + $NUM`"
+
+                if [ ! -e "${FILENAME}" ] ; then
+                    mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
+                else
+                    (head -n -2 "${FILENAME}" && \
+                     echo "  }," && \
+                     tail -n +2 "${FILENAME}.__WRITING__"
+                    ) > "${FILENAME}.__WRITING__.tmp" \
+                    || { PULLS_OK=false; break; }
+
+                    mv -f "${FILENAME}.__WRITING__.tmp" "${FILENAME}"
+                    rm -f "${FILENAME}.__WRITING__"
+                fi
+
+                if [ $NUM -lt 100 ] ; then
+                    # Last page
+                    break
+                fi
+                PAGENUM="`expr $PAGENUM + 1`"
+            done
+            echo "Collected $PULLS_COUNT pull requests in $PAGENUM pages for ${GHBU_ORG}/${REPO}; overall success: $PULLS_OK"
+            $PULLS_OK && tgz_nonrepo "${FILENAME}"
             ;;
     esac
 done
