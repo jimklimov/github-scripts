@@ -231,6 +231,8 @@ function get_multipage_file {
     # and load for servers (and REST API quota hits), by asking GitHub
     # REST API directly: "If-Modified-Since" we last fetched the document:
     [ -s "$FILENAME" ] && FILEDATE="`date -R -u -r "$FILENAME" | sed 's,\+0000,GMT,'`" || FILEDATE=""
+    ETAGS="`dirname "$FILENAME"`/etag.cache"
+    [ -s "$ETAGS" ] && FILEETAG="`grep "$APIURL" < "$ETAGS" | awk '{print $1}'`" || FILEETAG=""
     rm -f "$FILENAME" || true
     MULTIPAGE_NUM=1
     MULTIPAGE_OK=true
@@ -243,9 +245,15 @@ function get_multipage_file {
         # Ordering defaults to showing newest issues first
         CURLRES=0
         rm -f "${FILENAME}.headers" || true
+        WANT_HEADER=""
+        if [ 1 = "$MULTIPAGE_NUM" ] && ( [ -n "$FILEETAG" ] || [ -n "$FILEDATE" ] ) ; then
+            WANT_HEADER="yes"
+        fi
         curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
             -H "User-Agent: ${GHBU_UNAME}" \
-            ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
+            ${FILEETAG+-H "If-None-Match: $FILEETAG"} \
+            ${FILEDATE+-H "If-Modified-Since: $FILEDATE"} \
+            ${WANT_HEADER+-D "${FILENAME}.headers"} \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
         > "${FILENAME}.__WRITING__" \
         || {
@@ -253,10 +261,20 @@ function get_multipage_file {
             sleep 120
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
                 -H "User-Agent: ${GHBU_UNAME}" \
-                ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
+                ${FILEETAG+-H "If-None-Match: $FILEETAG"} \
+                ${FILEDATE+-H "If-Modified-Since: $FILEDATE"} \
+                ${WANT_HEADER+-D "${FILENAME}.headers"} \
                 "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
             > "${FILENAME}.__WRITING__"
         } || CURLRES=$?
+
+        # NOTE: Value may include quotes; header is posted with them!
+        NEWETAG="`grep -i '^etag:' "${FILENAME}.headers" | sed 's,^[Ee][Tt][Aa][Gg]: *,,'`" || NEWETAG=""
+        if [ -n "$NEWETAG" ] && [ x"$NEWETAG" != x"$FILEETAG" ] ; then
+            printf '%s\t%s\n' "$NEWETAG" "$APIURL" > "$ETAGS.tmp"
+            if [ -s "$ETAGS" ]; then grep -v "$APIURL" "$ETAGS" >> "$ETAGS.tmp" ; fi
+            mv "$ETAGS.tmp" "$ETAGS"
+        fi
 
         if head -1 "${FILENAME}.headers" | grep -E "HTTP.*304" ; then
             rm -f "${FILENAME}.headers" "${FILENAME}.__WRITING__"
@@ -426,8 +444,8 @@ for REPO in $REPOLIST; do
             else
                 check mkdir -p "${DIRNAME}" \
                 && ( cd "${DIRNAME}" && git init \
-                    && touch list-issues.json list-pulls.json \
-                    && git add list-issues.json list-pulls.json \
+                    && touch list-issues.json list-pulls.json etags.cache \
+                    && git add list-issues.json list-pulls.json etags.cache \
                     && git commit -m 'Initial commit' ) \
                 || check [ "$?" = 0 ]
             fi
@@ -477,7 +495,7 @@ for REPO in $REPOLIST; do
             done
 
             $PULLS_OK && $ISSUES_OK \
-            && ( cd "${DIRNAME}" && git commit -m "Update due to backup at `LANG=C LC_ALL=C TZ=UTC date -u`" ) \
+            && ( cd "${DIRNAME}" && git add etags.cache && git commit -m "Update due to backup at `LANG=C LC_ALL=C TZ=UTC date -u`" ) \
             && tgz "${DIRNAME}"
             ;;
     esac
