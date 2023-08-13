@@ -226,6 +226,11 @@ function filter_gist_comments {
 function get_multipage_file {
     # Uses caller envvars FILENAME, APIURL, APIQUERY_SUFFIX, ENTRYID_REGEX
     # Returns MULTIPAGE_NUM, MULTIPAGE_OK, ENTRY_COUNT
+
+    # Assumes GNU date or compatible - try to avoid extra traffic for us
+    # and load for servers (and REST API quota hits), by asking GitHub
+    # REST API directly: "If-Modified-Since" we last fetched the document:
+    [ -s "$FILENAME" ] && FILEDATE="`date -R -u -r "$FILENAME" | sed 's,\+0000,GMT,'`" || FILEDATE=""
     rm -f "$FILENAME" || true
     MULTIPAGE_NUM=1
     MULTIPAGE_OK=true
@@ -234,16 +239,34 @@ function get_multipage_file {
         # ex. APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues"
         # ex. APIQUERY_SUFFIX="&state=all"
         # Defaults to showing newest issues first
+        CURLRES=0
+        rm -f "${FILENAME}.headers" || true
         curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+            ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
         > "${FILENAME}.__WRITING__" \
         || {
             echo "FAILED to fetch '${APIURL}' once: will sleep in case it is about the usage quota and try again"
             sleep 120
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
+                ${FILEDATE+-H "If-Modified-Since: $FILEDATE" -D "${FILENAME}.headers"} \
                 "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
             > "${FILENAME}.__WRITING__"
-        } || { MULTIPAGE_OK=false; break; }
+        } || CURLRES=$?
+
+        if head -1 "${FILENAME}.headers" | grep -E "HTTP.*304" ; then
+            rm -f "${FILENAME}.headers" "${FILENAME}.__WRITING__"
+            MULTIPAGE_OK=true
+            ENTRY_COUNT="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}"`"
+            break
+        fi
+        # Only ask for first page
+        FILEDATE=""
+
+        if [ $CURLRES != 0 ] ; then
+            MULTIPAGE_OK=false
+            break
+        fi
 
         # ex. ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"'
         NUM="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}.__WRITING__"`"
