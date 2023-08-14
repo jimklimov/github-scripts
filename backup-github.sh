@@ -212,7 +212,7 @@ function getgit (
 function filter_user_org {
     # Might be better off getting a "clone_url" here, but so far our
     # directory naming etc. rely on the "REPONAME" value received here:
-    check grep  "^    \"name\"" | check awk -F': "' '{print $2}' | check sed -e 's/",//g'
+    check grep  '^    "name"' | check awk -F': "' '{print $2}' | check sed -e 's/",//g'
 }
 
 function filter_gist {
@@ -251,8 +251,8 @@ function get_multipage_file {
         fi
         curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
             -H "User-Agent: ${GHBU_UNAME}" \
-            ${FILEETAG+-H "If-None-Match: $FILEETAG"} \
-            ${FILEDATE+-H "If-Modified-Since: $FILEDATE"} \
+            ${FILEETAG+-H "If-None-Match: ${FILEETAG}"} \
+            ${FILEDATE+-H "If-Modified-Since: ${FILEDATE}"} \
             ${WANT_HEADER+-D "${FILENAME}.headers"} \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
         > "${FILENAME}.__WRITING__" \
@@ -261,8 +261,8 @@ function get_multipage_file {
             sleep 120
             check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" \
                 -H "User-Agent: ${GHBU_UNAME}" \
-                ${FILEETAG+-H "If-None-Match: $FILEETAG"} \
-                ${FILEDATE+-H "If-Modified-Since: $FILEDATE"} \
+                ${FILEETAG+-H "If-None-Match: ${FILEETAG}"} \
+                ${FILEDATE+-H "If-Modified-Since: ${FILEDATE}"} \
                 ${WANT_HEADER+-D "${FILENAME}.headers"} \
                 "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
             > "${FILENAME}.__WRITING__"
@@ -355,6 +355,7 @@ GIST_COMMENTLIST_PAGE=""
 REPOLIST=""
 REPOLIST_PAGE=""
 PAGENUM=1
+# TODO: Convert to get_multipage_file()?
 while : ; do
     JSON=""
     case x"$GHBU_ORGMODE" in
@@ -376,6 +377,8 @@ while : ; do
             ;;
     esac
 
+    # Not exactly a valid JSON file (gets lists just concatenated), but
+    # so far good enough to grep it, and some parsers treat it well too
     echo "$JSON" >> "${GHBU_BACKUP_DIR}/${GHBU_ORG}-metadata.json.__WRITING__"
 
     if [ -z "$REPOLIST" ] ; then
