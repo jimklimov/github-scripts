@@ -241,7 +241,8 @@ function get_multipage_file {
         # ex. APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues"
         # ex. APIQUERY_SUFFIX="&state=all"
         # Also note: https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#user-agent-required
-        # hence `the User-Agent: username`
+        # hence `the User-Agent: username` however it causes JSON
+        # markup not prettified for humans (and line-based grep)
         # Ordering defaults to showing newest issues first
         CURLRES=0
         rm -f "${FILENAME}.headers" || true
@@ -297,9 +298,9 @@ function get_multipage_file {
         if [ ! -e "${FILENAME}" ] ; then
             mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
         else
-            (head -n -2 "${FILENAME}" && \
+            (jq < "${FILENAME}" | head -n -2 && \
              echo "  }," && \
-             tail -n +2 "${FILENAME}.__WRITING__"
+             jq < "${FILENAME}.__WRITING__" | tail -n +2
             ) > "${FILENAME}.__WRITING__.tmp" \
             || { MULTIPAGE_OK=false; break; }
 
@@ -317,6 +318,8 @@ function get_multipage_file {
     # Return status
     $MULTIPAGE_OK
 }
+
+check command -v jq
 
 $GHBU_SILENT || (echo "" && echo "=== INITIALIZING ===" && echo "")
 
@@ -367,11 +370,14 @@ while : ; do
             # lots of noise and more time to get the listing, this leads
             # to broken backup cycles when we try to fetch repo names that
             # are not known under this user's personal namespace.
+            # Note: user-agent causes compacted JSON we can not grep in => jq
             JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
+            JSON="$(echo "$JSON" | check jq)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
             JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            JSON="$(echo "$JSON" | check jq)"
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             GIST_COMMENTLIST_PAGE="$(echo "$JSON" | filter_gist_comments)"
             ;;
@@ -459,7 +465,7 @@ for REPO in $REPOLIST; do
             FILENAME="${ISSUES_FILENAME}" \
                 APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues" \
                 APIQUERY_SUFFIX="&state=all" \
-                ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' \
+                ENTRYID_REGEX='"url": *"'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"' \
                 get_multipage_file
             $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} issues in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
             $MULTIPAGE_OK && ( cd "${DIRNAME}" && git add "`basename "$ISSUES_FILENAME"`" ) || MULTIPAGE_OK=false
@@ -472,7 +478,7 @@ for REPO in $REPOLIST; do
             FILENAME="${PULLS_FILENAME}" \
                 APIURL="${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls" \
                 APIQUERY_SUFFIX="&state=all" \
-                ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' \
+                ENTRYID_REGEX='"url": *"'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/pulls?/[0123456789]+"'"' \
                 get_multipage_file
             $GHBU_SILENT || echo "Collected ${ENTRY_COUNT} pull requests in ${MULTIPAGE_NUM} pages for ${GHBU_ORG}/${REPO}; overall success: ${MULTIPAGE_OK}"
             $MULTIPAGE_OK && ( cd "${DIRNAME}" && git add "`basename "$PULLS_FILENAME"`" ) || MULTIPAGE_OK=false
@@ -492,7 +498,7 @@ for REPO in $REPOLIST; do
                 esac
                 $GHBU_SILENT || echo "Backing up ${GHBU_ORG}/${REPO} issue or pull request details from: ${SUB_URL}"
                 FILENAME="${DIRNAME}/${SUB_FILENAME}" APIURL="${SUB_URL}" \
-                    ENTRYID_REGEX='("sha": "[0-9a-f]{40}"|"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/(issues|pulls)/comments/[0-9]+"'")' \
+                    ENTRYID_REGEX='("sha": *"[0-9a-f]{40}"|"url": *"'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/(issues|pulls)/comments/[0-9]+"'")' \
                     get_multipage_file \
                 && ( cd "${DIRNAME}" && git add "${SUB_FILENAME}" )
             done
