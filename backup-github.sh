@@ -256,7 +256,7 @@ function get_multipage_file {
             ${FILEDATE+-H "If-Modified-Since: ${FILEDATE}"} \
             ${WANT_HEADER+-D "${FILENAME}.headers"} \
             "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
-        > "${FILENAME}.__WRITING__" \
+        > "${FILENAME}.__WRITING__.tmp" \
         || {
             echo "FAILED to fetch '${APIURL}' once: will sleep in case it is about the usage quota and try again"
             sleep 120
@@ -266,7 +266,7 @@ function get_multipage_file {
                 ${FILEDATE+-H "If-Modified-Since: ${FILEDATE}"} \
                 ${WANT_HEADER+-D "${FILENAME}.headers"} \
                 "${APIURL}?per_page=100&page=${MULTIPAGE_NUM}${APIQUERY_SUFFIX}" -q \
-            > "${FILENAME}.__WRITING__"
+            > "${FILENAME}.__WRITING__.tmp"
         } || CURLRES=$?
 
         # NOTE: Value may include quotes; header is posted with them!
@@ -278,7 +278,7 @@ function get_multipage_file {
         fi
 
         if head -1 "${FILENAME}.headers" | grep -E "HTTP.*304" ; then
-            rm -f "${FILENAME}.headers" "${FILENAME}.__WRITING__"
+            rm -f "${FILENAME}.headers" "${FILENAME}.__WRITING__.tmp"
             MULTIPAGE_OK=true
             ENTRY_COUNT="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}"`"
             break
@@ -291,16 +291,20 @@ function get_multipage_file {
             break
         fi
 
+        # Produce pretty JSON we can grep in, and otherwise manipulate below:
+        jq < "${FILENAME}.__WRITING__.tmp" > "${FILENAME}.__WRITING__"
+        rm -f "${FILENAME}.__WRITING__.tmp"
+
         # ex. ENTRYID_REGEX='"url": "'"${GHBU_API}/repos/${GHBU_ORG}/${REPO}/issues/[0123456789]+"'"'
         NUM="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}.__WRITING__"`"
         ENTRY_COUNT="`expr $ENTRY_COUNT + $NUM`"
 
         if [ ! -e "${FILENAME}" ] ; then
-            mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
+            check mv -f "${FILENAME}.__WRITING__" "${FILENAME}"
         else
-            (jq < "${FILENAME}" | head -n -2 && \
+            (head -n -2 "${FILENAME}" && \
              echo "  }," && \
-             jq < "${FILENAME}.__WRITING__" | tail -n +2
+             tail -n +2 "${FILENAME}.__WRITING__"
             ) > "${FILENAME}.__WRITING__.tmp" \
             || { MULTIPAGE_OK=false; break; }
 
