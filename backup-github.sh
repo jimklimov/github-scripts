@@ -289,8 +289,8 @@ function get_multipage_file {
         fi
 
         # Only ask for first page
-        FILEDATE=""
-        FILEETAG=""
+        unset FILEDATE
+        unset FILEETAG
 
         if [ $CURLRES != 0 ] ; then
             MULTIPAGE_OK=false
