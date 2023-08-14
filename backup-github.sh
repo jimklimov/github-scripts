@@ -373,11 +373,13 @@ while : ; do
             # Note: user-agent causes compacted JSON we can not grep in => jq
             JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
             JSON="$(echo "$JSON" | check jq)"
+            echo "$JSON" | grep "API rate limit" && check false
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
             JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
             JSON="$(echo "$JSON" | check jq)"
+            echo "$JSON" | grep "API rate limit" && check false
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
             GIST_COMMENTLIST_PAGE="$(echo "$JSON" | filter_gist_comments)"
             ;;
