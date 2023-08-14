@@ -231,9 +231,8 @@ function get_multipage_file {
     # and load for servers (and REST API quota hits), by asking GitHub
     # REST API directly: "If-Modified-Since" we last fetched the document:
     [ -s "$FILENAME" ] && FILEDATE="`date -R -u -r "$FILENAME" | sed 's,\+0000,GMT,'`" || FILEDATE=""
-    ETAGS="`dirname "$FILENAME"`/etag.cache"
-    [ -s "$ETAGS" ] && FILEETAG="`grep "$APIURL" < "$ETAGS" | awk '{print $1}'`" || FILEETAG=""
-    rm -f "$FILENAME" || true
+    ETAGS="`dirname "$FILENAME"`/etags.cache"
+    [ -s "$ETAGS" ] && FILEETAG="`grep -E "\t$APIURL\$" < "$ETAGS" | awk '{print $1}'`" || FILEETAG=""
     MULTIPAGE_NUM=1
     MULTIPAGE_OK=true
     ENTRY_COUNT=0
@@ -244,6 +243,9 @@ function get_multipage_file {
         # hence `the User-Agent: username` however it causes JSON
         # markup not prettified for humans (and line-based grep)
         # Ordering defaults to showing newest issues first
+        # TODO: Can we impact ordering of comments so newest
+        # changed would be first and we know from the first page
+        # that we need to re-fetch this?..
         CURLRES=0
         rm -f "${FILENAME}.headers" || true
         WANT_HEADER=""
@@ -270,25 +272,34 @@ function get_multipage_file {
         } || CURLRES=$?
 
         # NOTE: Value may include quotes; header is posted with them!
-        NEWETAG="`grep -i '^etag:' "${FILENAME}.headers" | sed 's,^[Ee][Tt][Aa][Gg]: *,,'`" || NEWETAG=""
+        NEWETAG="`grep -i '^etag:' "${FILENAME}.headers" | sed 's,^[Ee][Tt][Aa][Gg]: *,,' | tr -d '\r' | tr -d '\n'`" || NEWETAG=""
         if [ -n "$NEWETAG" ] && [ x"$NEWETAG" != x"$FILEETAG" ] ; then
             printf '%s\t%s\n' "$NEWETAG" "$APIURL" > "$ETAGS.tmp"
             if [ -s "$ETAGS" ]; then grep -v "$APIURL" "$ETAGS" >> "$ETAGS.tmp" ; fi
             mv "$ETAGS.tmp" "$ETAGS"
         fi
 
-        if head -1 "${FILENAME}.headers" | grep -E "HTTP.*304" ; then
+        if head -1 "${FILENAME}.headers" | grep -E "HTTP.*304" > /dev/null ; then
+            # Let HTTP-304 skips be seen
+            $GHBU_SILENT || echo "SKIP: (First page of) the requested resource did not change"
             rm -f "${FILENAME}.headers" "${FILENAME}.__WRITING__.tmp"
             MULTIPAGE_OK=true
             ENTRY_COUNT="`grep -Ec "$ENTRYID_REGEX" < "${FILENAME}"`"
             break
         fi
+
         # Only ask for first page
         FILEDATE=""
+        FILEETAG=""
 
         if [ $CURLRES != 0 ] ; then
             MULTIPAGE_OK=false
             break
+        fi
+
+        if [ 1 = "$MULTIPAGE_NUM" ] ; then
+            # Not cached => replace
+            rm -f "$FILENAME" || true
         fi
 
         # Produce pretty JSON we can grep in, and otherwise manipulate below:
@@ -318,6 +329,8 @@ function get_multipage_file {
         fi
         MULTIPAGE_NUM="`expr $MULTIPAGE_NUM + 1`"
     done
+
+    rm -f "${FILENAME}.headers"
 
     # Return status
     $MULTIPAGE_OK
