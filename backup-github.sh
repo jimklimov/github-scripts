@@ -112,8 +112,8 @@ function tgz_nonrepo {
 function prune_incomplete {
     if $GHBU_PRUNE_INCOMPLETE ; then
         $GHBU_SILENT || (echo "" && echo "=== PRUNING INCOMPLETE LEFTOVERS (if any) ===" && echo "")
-        $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' | wc -l` files to prune."
-        find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__' -exec rm -fv {} > /dev/null \;
+        $GHBU_SILENT || echo "Found `find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__*' | wc -l` files to prune."
+        find $GHBU_BACKUP_DIR -maxdepth 1 -name '*.__WRITING__*' -exec rm -fv {} > /dev/null \;
         $GHBU_SILENT || (echo "" && echo "=== PRUNING FINISHED ===" && echo "")
     fi
 }
