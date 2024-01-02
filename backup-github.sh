@@ -467,9 +467,25 @@ for REPO in $REPOLIST; do
             DIRNAME="`getdir "$REPO.issues-and-pulls"`"
             $GHBU_SILENT || echo "Preparing local git repo in '${DIRNAME}' to receive issue and PR data"
             if [ -d "${DIRNAME}/.git" ]; then
-                ( cd "${DIRNAME}" && git checkout -f && git clean -fffdddxxx ) \
-                || check [ "$?" = 0 ]
-            else
+                ( cd "${DIRNAME}" && git checkout -f
+                  case $? in
+                    0)  git clean -fffdddxxx ;;
+                    128) GITOUT="`git log --oneline -1`"
+                        # `ls` => empty etags.cache list-issues.json list-pulls.json
+                        if [ $? = 128 ] && ( echo "${GITOUT}" | grep -E 'fatal: (your current branch .* does not have any commits yet|You are on a branch yet to be born)' ) && [ `ls -1 | wc -l` = 3 ] ; then
+                            $GHBU_SILENT || echo "Removing botched earlier preparation of a local git repo in '${DIRNAME}' to receive issue and PR data"
+                            # rm -rf .git
+                            BASE_DIRNAME="`basename "${DIRNAME}"`"
+                            cd .. && rm -rf "${BASE_DIRNAME}"
+                        else
+                            exit 128
+                        fi
+                        ;;
+                  esac
+                ) || check [ "$?" = 0 ]
+            fi
+
+            if [ ! -d "${DIRNAME}/.git" ]; then
                 check mkdir -p "${DIRNAME}" \
                 && ( cd "${DIRNAME}" && git init \
                     && touch list-issues.json list-pulls.json etags.cache \
