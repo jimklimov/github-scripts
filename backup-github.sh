@@ -503,6 +503,7 @@ for REPO in $REPOLIST; do
             if [ ! -d "${DIRNAME}/.git" ]; then
                 check mkdir -p "${DIRNAME}" \
                 && ( cd "${DIRNAME}" && git init \
+                    && { git config gc.autodetach false ; git config commit.gpgsign false ; true ; } \
                     && touch list-issues.json list-pulls.json etags.cache \
                     && git add list-issues.json list-pulls.json etags.cache \
                     && git commit -m 'Initial commit' ) \
