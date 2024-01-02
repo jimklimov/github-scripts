@@ -506,8 +506,8 @@ for REPO in $REPOLIST; do
                     && { git config gc.autodetach false ; git config commit.gpgsign false ; true ; } \
                     && touch list-issues.json list-pulls.json etags.cache \
                     && git add list-issues.json list-pulls.json etags.cache \
-                    && git commit -m 'Initial commit' ) \
-                || check [ "$?" = 0 ]
+                    && git commit -m 'Initial commit' \
+                ) || check [ "$?" = 0 ]
             fi
 
             # List of issues:
