@@ -523,8 +523,12 @@ for REPO in $REPOLIST; do
             done
 
             $PULLS_OK && $ISSUES_OK \
-            && ( cd "${DIRNAME}" && git add etags.cache && git commit -m "Update due to backup at `LANG=C LC_ALL=C TZ=UTC date -u`" ) \
-            && tgz "${DIRNAME}"
+            && (
+                GITMSG="Update due to backup at `LANG=C LC_ALL=C TZ=UTC date -u`"
+                cd "${DIRNAME}" && \
+                git add etags.cache && \
+                { git commit -m "${GITMSG}" || { echo "Retry git commit without GPG" >&2 ; git commit --no-gpg-sign -m "${GITMSG}" ; } ; }
+            ) && tgz "${DIRNAME}"
             ;;
     esac
 done
