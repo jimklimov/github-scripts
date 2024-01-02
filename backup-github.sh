@@ -485,7 +485,7 @@ for REPO in $REPOLIST; do
                 ( cd "${DIRNAME}" && git checkout -f
                   case $? in
                     0)  git clean -fffdddxxx ;;
-                    128) GITOUT="`git log --oneline -1`"
+                    128) GITOUT="`git log --oneline -1 2>&1`"
                         # `ls` => empty etags.cache list-issues.json list-pulls.json
                         if [ $? = 128 ] && ( echo "${GITOUT}" | grep -E 'fatal: (your current branch .* does not have any commits yet|You are on a branch yet to be born)' ) && [ `ls -1 | wc -l` = 3 ] ; then
                             $GHBU_SILENT || echo "Removing botched earlier preparation of a local git repo in '${DIRNAME}' to receive issue and PR data"
