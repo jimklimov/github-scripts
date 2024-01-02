@@ -74,6 +74,19 @@ function check {
     fi
 }
 
+# The function `check_unexpected_success` will exit the script if the given command DOES NOT FAIL.
+function check_unexpected_success {
+    "$@"
+    status=$?
+    if [ $status -eq 0 ]; then
+        echo "ERROR: Encountered error (unexpected success) while running the following:" >&2
+        echo "           $@"  >&2
+        echo "       (at line ${BASH_LINENO[0]} of file $0.)"  >&2
+        echo "       Aborting." >&2
+        exit 1
+    fi
+}
+
 # The function `tgz` will create a gzipped tar archive of the specified
 # file ($1) and then optionally remove the original
 function tgz {
@@ -388,13 +401,15 @@ while : ; do
             # to broken backup cycles when we try to fetch repo names that
             # are not known under this user's personal namespace.
             # Note: user-agent causes compacted JSON we can not grep in => jq
-            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
+            JSON="$(curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}/repos?per_page=100&page=$PAGENUM&type=owner" -q)"
+            check [ "$?" = 0 ]
             JSON="$(echo "$JSON" | check jq)"
             echo "$JSON" | grep "API rate limit" && check false
             REPOLIST_PAGE="$(echo "$JSON" | filter_user_org)"
             ;;
         xgist*)
-            JSON="$(check curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            JSON="$(curl --silent -u "${GHBU_UNAME}:${GHBU_PASSWD}" -H "User-Agent: ${GHBU_UNAME}" "${GHBU_API}${GHBU_ORG_URI}?per_page=100&page=$PAGENUM" -q)"
+            check [ "$?" = 0 ]
             JSON="$(echo "$JSON" | check jq)"
             echo "$JSON" | grep "API rate limit" && check false
             REPOLIST_PAGE="$(echo "$JSON" | filter_gist)"
