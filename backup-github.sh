@@ -177,7 +177,7 @@ function GITCMD {
 
 # The function `getgit` will clone (or update) specified repo ($1, without
 # a `.git` suffix) into specified directory ($2)
-function getgit (
+function getgit() (
     # Sub-shelled to constrain "export" visibility of credentials
     local REPOURI="$1"
     local DIRNAME="$2"
