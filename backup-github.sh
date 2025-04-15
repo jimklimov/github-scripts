@@ -140,18 +140,13 @@ function getdir {
     REPOURI="$(echo "$REPOURI" | sed 's,^https://gist.github.com/\(.*\)$,gist-\1,')"
     # Note our caller adds a ".comments" suffix; another may be from API, orig:
     #   https://api.github.com/gists/b92a4fe5bb8eab70e79d6f1581563863/comments
-    REPOURI="$(echo "$REPOURI" | sed 's,^'"$GHBU_API"'/gists/\([^/]*\)/comments\(\.comments\)*$,gist-\1-comments,')"
+    REPOURI="$(echo "$REPOURI" | sed -e 's,^'"$GHBU_API"'/gists/\([^/]*\)/comments\(\.comments\)*$,gist-\1-comments,' -e 's,\.git$,,')"
 
-    if $GHBU_REUSE_REPOS ; then
-        DIRNAME="${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPOURI}"
-    fi
+    DIRNAME="${GHBU_BACKUP_DIR}/${GHBU_ORG}-${REPOURI}"
     if ! $GHBU_REUSE_REPOS ; then
         DIRNAME="${DIRNAME}-${TSTAMP}"
     fi
-    case "$REPOURI" in
-        *.git) ;;
-        *) DIRNAME="${DIRNAME}.git" ;;
-    esac
+    DIRNAME="${DIRNAME}.git"
     echo "$DIRNAME"
 }
 
