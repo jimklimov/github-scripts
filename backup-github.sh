@@ -314,7 +314,7 @@ function get_multipage_file {
         jq < "${FILENAME}.__WRITING__.tmp" > "${FILENAME}.__WRITING__"
         rm -f "${FILENAME}.__WRITING__.tmp"
 
-        if [ 1024 > "`wc -c < "${FILENAME}.__WRITING__"`" ] \
+        if [ 1024 -gt "`wc -c < "${FILENAME}.__WRITING__"`" ] \
         && grep -q '"message": "API rate limit exceeded' "${FILENAME}.__WRITING__" \
         ; then
             echo "FAILED to fetch '${APIURL}': got some contents but they are short and only say that API rate limit exceeded"
