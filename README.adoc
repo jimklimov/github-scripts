@@ -26,5 +26,32 @@ Now it can handle backups of both Orgs, Users and Gists over SSH (if keys
 are preloaded to SSH agent) or HTTP(S) protocols, and includes systemd unit
 wrappers (timer, service) to run regularly after you get it set up initially.
 
+GitHub API throttling
+~~~~~~~~~~~~~~~~~~~~~
+
+Even if you use an authenticated token, you are limited to 5000 API queries
+per hour (as of this writing). While the script does try to back off when
+getting query errors, it may be more efficient to spread your queries across
+the day (based on a rough estimate of how many API items -- notably, gists,
+issue comments and PR commits) you have out there. For example (inspired
+by https://wiki.archlinux.org/title/Systemd/Timers -- see there for more
+details, e.g. if you need to spread it across so many hours that you have
+to iterate week-days as well):
+
+------
+:; H=1; for U in `systemctl -a | grep -i ghbu | awk '{print $1}' | grep timer` ; do
+    mkdir -p /etc/systemd/system/$U.d && \
+        printf '[Timer]\nOnCalendar=*-*-* %s:00:00\n' "$H" \
+        > /etc/systemd/system/$U.d/calendar.conf ; \
+        H=$(($H+2)); \
+    done
+
+# Check it is still under 24 ;) else adjust the interval or fiddle with grep
+# of smaller/bigger orgs/users to dedicate different time slot sizes
+:; echo $H
+
+:; systemctl daemon-reload
+------
+
 Hope this helps,
 Jim Klimov
