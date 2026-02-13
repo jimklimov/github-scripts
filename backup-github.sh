@@ -35,12 +35,20 @@
 #-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
-# CONFIG:
+# GITHUB ACCOUNT CONFIG:
 #-------------------------------------------------------------------------------
 GHBU_ORG=${GHBU_ORG-"<CHANGE-ME>"}                                   # the GitHub organization whose repos will be backed up
 #                                                                    # (if you're backing up a USER's repos, this should be your GitHub username; also see the note below about the `REPOLIST` definition)
 GHBU_UNAME=${GHBU_UNAME-"<CHANGE-ME>"}                               # the username of a GitHub account (to use with the GitHub API)
 GHBU_PASSWD=${GHBU_PASSWD-"<CHANGE-ME>"}                             # the password for that account
+#-------------------------------------------------------------------------------
+# GITHUB APP CONFIG:
+#-------------------------------------------------------------------------------
+GHAPP_MODE=${GHAPP_MODE-"off"}                                                 # Change to "app" if you want to use a GitHub App instead of a GitHub Account
+GH_APP_ID=${GH_APP_ID-"<CHANGE-ME-APP-ID>"}                                    # Provided by creating a GitHub App
+GH_APP_PEM_FILE=${GH_APP_PEM_FILE-"<CHANGE-ME-PATH-TO-APP-PRIVATE-KEY.pem>"}   # Provided by creating a GitHub App
+GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID-"<CHANGE-ME-INSTALLATION-ID>"} # Provided by installing a GitHub App to an org
+GH_USERAGENT=${GH_USERAGENT-"ghbu-backup-script"}
 #-------------------------------------------------------------------------------
 GHBU_ORGMODE=${GHBU_ORGMODE-"org"}                                   # "org", "user" or "gists"?
 GHBU_BACKUP_DIR=${GHBU_BACKUP_DIR-"github-backups"}                  # where to place the backup files; avoid using ":" in the name (confuses tar as a hostname; confuses Windows as a drive letter)
@@ -53,13 +61,58 @@ GHBU_PRUNE_OLD=${GHBU_PRUNE_OLD-true}                                # when `tru
 GHBU_PRUNE_AFTER_N_DAYS=${GHBU_PRUNE_AFTER_N_DAYS-3}                 # the min age (in days) of backup files to delete
 GHBU_SILENT=${GHBU_SILENT-false}                                     # when `true`, only show error messages
 GHBU_API=${GHBU_API-"https://api.github.com"}                        # base URI for the GitHub API
-GHBU_GIT_CLONE_CMD="GITCMD clone --quiet --mirror "                  # base command to use to clone GitHub repos from an URL (may need more info for SSH)
-GHBU_GIT_CLONE_CMD_SSH="${GHBU_GIT_CLONE_CMD} git@${GHBU_GITHOST}:"  # base command to use to clone GitHub repos over SSH
+GHBU_GIT_CLONE_CMD=${GHBU_GIT_CLONE_CMD-"GITCMD clone --quiet --mirror "}  # base command to use to clone GitHub repos from an URL (may need more info for SSH)
 GHBU_FAILFAST_GETGIT="${GHBU_FAILFAST_GETGIT-true}"                  # if true, repeated failure of getgit() will fail the script; if false - go over other repos
 TSTAMP="`TZ=UTC date "+%Y%m%dT%H%MZ"`"                               # format of timestamp suffix appended to archived files
 #-------------------------------------------------------------------------------
 # (end config)
-#-------------------------------------------------------------------------------
+
+if [ "$GHAPP_MODE" = "app" ]; then
+    command -v openssl >/dev/null || { echo "ERROR: openssl is required" >&2; exit 1; }
+fi
+
+# Json webtoken support (aka black magic)
+b64url() { openssl enc -base64 -A | tr '+/' '-_' | tr -d '='; }
+make_github_app_jwt() {
+  local now iat exp header payload signing_input sig
+  now=$(date +%s); iat=$((now-60)); exp=$((now+540))
+  header='{"alg":"RS256","typ":"JWT"}'
+  payload=$(jq -cn --arg iss "$GH_APP_ID" --argjson iat "$iat" --argjson exp "$exp" '{iss:$iss|tonumber, iat:$iat, exp:$exp}')
+  signing_input="$(printf '%s' "$header" | b64url).$(printf '%s' "$payload" | b64url)"
+  sig=$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign "$GH_APP_PEM_FILE" -binary | b64url)
+  printf '%s.%s
+' "$signing_input" "$sig"
+}
+GH_INSTALL_TOKEN=""; GH_INSTALL_TOKEN_EXPIRES=0
+ensure_install_token() {
+  [ "$GHAPP_MODE" = "app" ] || return 0
+  local now jwt resp tok exp_iso
+  now=$(date +%s)
+  if [ -n "$GH_INSTALL_TOKEN" ] && [ $((GH_INSTALL_TOKEN_EXPIRES - now)) -gt 600 ]; then return 0; fi
+  jwt="$(make_github_app_jwt)"
+  resp=$(command curl --silent -X POST          -H "Accept: application/vnd.github+json"          -H "Authorization: Bearer ${jwt}"          "${GHBU_API}/app/installations/${GH_APP_INSTALLATION_ID}/access_tokens")
+  tok=$(printf '%s' "$resp" | jq -r '.token // empty')
+  exp_iso=$(printf '%s' "$resp" | jq -r '.expires_at // empty')
+  if [ -z "$tok" ] || [ -z "$exp_iso" ]; then echo "ERROR: Could not obtain installation token" >&2; echo "$resp" >&2; return 1; fi
+  GH_INSTALL_TOKEN="$tok"
+  GH_INSTALL_TOKEN_EXPIRES=$(date -d "$exp_iso" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$exp_iso" +%s)
+  GHBU_UNAME="x-access-token"; GHBU_PASSWD="$GH_INSTALL_TOKEN"; export GHBU_UNAME GHBU_PASSWD
+}
+# Authenticated curl wrapper
+curl() {
+  if [ "$GHAPP_MODE" = "app" ]; then
+    ensure_install_token || return 1
+    local args=(); local skip=false
+    for a in "$@"; do # builds the args without the username & password
+      if $skip; then skip=false; continue; fi
+      if [ "$a" = "-u" ]; then skip=true; continue; fi
+      args+=("$a")
+    done
+    command curl -H "Authorization: Bearer ${GH_INSTALL_TOKEN}"    -H "Accept: application/vnd.github+json"        -H "User-Agent: ${GH_USERAGENT}"      "${args[@]}"
+  else
+    command curl "$@"
+  fi
+}
 
 # The function `check` will exit the script if the given command fails.
 function check {
@@ -176,14 +229,11 @@ function getgit() (
     # Sub-shelled to constrain "export" visibility of credentials
     local REPOURI="$1"
     local DIRNAME="$2"
-
-    case x"$1" in
-        xhttp://*|xhttps://*)
-            # Prepare HTTP(S) credential support for this git operation.
-            local CRED_HELPER='!f() { echo "username=$GHBU_UNAME"; echo "password=$GHBU_PASSWD"; }; f'
-            export CRED_HELPER GHBU_UNAME GHBU_PASSWD
-            ;;
-    esac
+    # For App mode or HTTPS, prepare credential helper so HTTPS clones won't prompt
+    if [ "$GHAPP_MODE" = "app" ] || { case "$1" in http://*|https://*) true;; *) false;; esac; }; then
+        local CRED_HELPER='!f() { echo "username=$GHBU_UNAME"; echo "password=$GHBU_PASSWD"; }; f'
+        export CRED_HELPER GHBU_UNAME GHBU_PASSWD
+    fi
 
     if $GHBU_REUSE_REPOS && [ -d "${DIRNAME}" ] ; then
         # Update an existing repo (if reusing)
@@ -201,13 +251,20 @@ function getgit() (
                 ${GHBU_GIT_CLONE_CMD} "${REPOURI}" "${DIRNAME}" || return
                 ;;
             *) # Just a repo name - complete it with data we know of
-                ${GHBU_GIT_CLONE_CMD_SSH}"${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}" \
-                || { # Errors were seen above, so no GHBU_SILENT here:
-                    echo "..... Attempt a retry over HTTPS" >&2
-                    # FIXME: Effectively we craft the clone_url
-                    # here, rather than using one from metadata
-                    ${GHBU_GIT_CLONE_CMD} "https://${GHBU_GITHOST}/${GHBU_ORG}/${REPOURI}" "${DIRNAME}" \
-                    && echo "..... Attempt a retry over HTTPS: SUCCEEDED" >&2 ; \
+                # FIXME: Effectively we craft the clone_url
+                # here, rather than using one from metadata
+                {
+                    echo "... Attempt via HTTPS (Authenticated)" >&2 
+                    ${GHBU_GIT_CLONE_CMD} "https://${GHBU_UNAME}:${GHBU_PASSWD}@${GHBU_GITHOST}/${GHBU_ORG}/${REPOURI}" "${DIRNAME}"
+                    echo "... Attempt via HTTPS (Authenticated): SUCCEEDED" >&2 ; \
+                } || {
+                    echo "... Attempt via HTTPS (Unauthenticated)" >&2 
+                    ${GHBU_GIT_CLONE_CMD} "https://${GHBU_GITHOST}/${GHBU_ORG}/${REPOURI}" "${DIRNAME}"
+                    echo "... Attempt via HTTPS (Unauthenticated): SUCCEEDED" >&2 ; \
+                } || {
+                    echo "... Attempt via SSH" >&2
+                    ${GHBU_GIT_CLONE_CMD} "git@${GHBU_GITHOST}/${GHBU_ORG}/${REPOURI}.git" "${DIRNAME}"
+                    echo "... Attempt via SSH: SUCCEEDED" >&2 ; \
                 } || return
                 ;;
         esac
@@ -362,6 +419,11 @@ check mkdir -p $GHBU_BACKUP_DIR
 prune_incomplete
 
 $GHBU_SILENT || echo -n "Fetching list of repositories for ${GHBU_ORG}..."
+
+# Initialise our app's token when running in app mode
+if [ "$GHAPP_MODE" = "app" ]; then
+    ensure_install_token ||  { echo "ERROR: bad GitHub App auth" >&2; exit 1; }
+fi
 
 case x"$GHBU_ORGMODE" in
     x"gist"|x"gists")
